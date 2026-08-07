@@ -2,21 +2,21 @@ pub type TokenType = &'static str;
 
 pub struct Token {
     pub token_type: TokenType,
-    pub literal: &'static str,
+    pub literal: String,
 }
 
-pub const ILLEGAL: &'static str = "ILLEGAL";
-pub const EOF: &'static str = "EOF";
-pub const IDENT: &'static str = "IDENT";
-pub const INT: &'static str = "INT";
-pub const ASSIGN: &'static str = "=";
-pub const PLUS: &'static str = "+";
-pub const COMMA: &'static str = ",";
-pub const SEMICOLON: &'static str = ";";
-pub const LPAREN: &'static str = "(";
-pub const RPAREN: &'static str = ")";
-pub const LBRACE: &'static str = "{";
-pub const RBRACE: &'static str = "}";
-pub const FUNCTION: &'static str = "FUNCTION";
-pub const LET: &'static str = "LET";
+pub const ILLEGAL: TokenType = "ILLEGAL";
+pub const EOF: TokenType = "EOF";
+pub const IDENT: TokenType = "IDENT";
+pub const INT: TokenType = "INT";
+pub const ASSIGN: TokenType = "=";
+pub const PLUS: TokenType = "+";
+pub const COMMA: TokenType = ",";
+pub const SEMICOLON: TokenType = ";";
+pub const LPAREN: TokenType = "(";
+pub const RPAREN: TokenType = ")";
+pub const LBRACE: TokenType = "{";
+pub const RBRACE: TokenType = "}";
+pub const FUNCTION: TokenType = "FUNCTION";
+pub const LET: TokenType = "LET";
 
