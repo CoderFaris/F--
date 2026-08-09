@@ -35,13 +35,43 @@ impl Lexer {
         self.consume_whitespace();
 
         let tok = match self.ch {
-            b'=' => new_token(ASSIGN, self.ch),
+            b'=' => {
+                if self.peek_char() == b'=' {
+                    let ch = self.ch;
+                    self.read_char();
+                    let lit = String::from_utf8(vec![ch, self.ch]).expect("Invalid UTF-8 sequence");
+                    Token {
+                        token_type: EQ,
+                        literal: lit,
+                    }
+                } else {
+                    new_token(ASSIGN, self.ch)
+                }
+            }
             b';' => new_token(SEMICOLON, self.ch),
             b'(' => new_token(LPAREN, self.ch),
             b')' => new_token(RPAREN, self.ch),
             b'{' => new_token(LBRACE, self.ch),
             b'}' => new_token(RBRACE, self.ch),
             b'+' => new_token(PLUS, self.ch),
+            b'-' => new_token(MINUS, self.ch),
+            b'*' => new_token(ASTERISK, self.ch),
+            b'/' => new_token(SLASH, self.ch),
+            b'<' => new_token(LT, self.ch),
+            b'>' => new_token(GT, self.ch),
+            b'!' => {
+                if self.peek_char() == b'=' {
+                    let ch = self.ch;
+                    self.read_char();
+                    let lit = String::from_utf8(vec![ch, self.ch]).expect("Invalid UTF-8 sequence");
+                    Token {
+                        token_type: NOT_EQ,
+                        literal: lit,
+                    }
+                } else {
+                    new_token(BANG, self.ch)
+                }
+            }
             b',' => new_token(COMMA, self.ch),
             0 => Token {
                 token_type: EOF,
@@ -103,6 +133,14 @@ impl Lexer {
         &self.input[position..self.position]
     }
 
+    fn peek_char(&mut self) -> u8 {
+        if self.read_position >= self.input.len() {
+            0
+        } else {
+            self.input[self.read_position]
+        }
+    }
+
     fn consume_whitespace(&mut self) {
         while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
             self.read_char();
@@ -138,6 +176,17 @@ mod tests {
             x + y;
         };
         let result = add(five, ten);
+        !-/*5;
+        5 < 10 > 5;
+
+        if(5 < 10) {
+            return true;
+        } else {
+            return false;
+        }
+
+        10 == 10;
+        10 != 9;
         ";
 
         struct TestType {
@@ -253,6 +302,194 @@ mod tests {
             TestType {
                 expected_type: LET,
                 expected_literal: "let",
+            },
+            TestType {
+                expected_type: IDENT,
+                expected_literal: "result",
+            },
+            TestType {
+                expected_type: ASSIGN,
+                expected_literal: "=",
+            },
+            TestType {
+                expected_type: IDENT,
+                expected_literal: "add",
+            },
+            TestType {
+                expected_type: LPAREN,
+                expected_literal: "(",
+            },
+            TestType {
+                expected_type: IDENT,
+                expected_literal: "five",
+            },
+            TestType {
+                expected_type: COMMA,
+                expected_literal: ",",
+            },
+            TestType {
+                expected_type: IDENT,
+                expected_literal: "ten",
+            },
+            TestType {
+                expected_type: RPAREN,
+                expected_literal: ")",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: BANG,
+                expected_literal: "!",
+            },
+            TestType {
+                expected_type: MINUS,
+                expected_literal: "-",
+            },
+            TestType {
+                expected_type: SLASH,
+                expected_literal: "/",
+            },
+            TestType {
+                expected_type: ASTERISK,
+                expected_literal: "*",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "5",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "5",
+            },
+            TestType {
+                expected_type: LT,
+                expected_literal: "<",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "10",
+            },
+            TestType {
+                expected_type: GT,
+                expected_literal: ">",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "5",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: IF,
+                expected_literal: "if",
+            },
+            TestType {
+                expected_type: LPAREN,
+                expected_literal: "(",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "5",
+            },
+            TestType {
+                expected_type: LT,
+                expected_literal: "<",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "10",
+            },
+            TestType {
+                expected_type: RPAREN,
+                expected_literal: ")",
+            },
+            TestType {
+                expected_type: LBRACE,
+                expected_literal: "{",
+            },
+            TestType {
+                expected_type: RETURN,
+                expected_literal: "return",
+            },
+            TestType {
+                expected_type: TRUE,
+                expected_literal: "true",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: RBRACE,
+                expected_literal: "}",
+            },
+            TestType {
+                expected_type: ELSE,
+                expected_literal: "else",
+            },
+            TestType {
+                expected_type: LBRACE,
+                expected_literal: "{",
+            },
+            TestType {
+                expected_type: RETURN,
+                expected_literal: "return",
+            },
+            TestType {
+                expected_type: FALSE,
+                expected_literal: "false",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: RBRACE,
+                expected_literal: "}",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "10",
+            },
+            TestType {
+                expected_type: EQ,
+                expected_literal: "==",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "10",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "10",
+            },
+            TestType {
+                expected_type: NOT_EQ,
+                expected_literal: "!=",
+            },
+            TestType {
+                expected_type: INT,
+                expected_literal: "9",
+            },
+            TestType {
+                expected_type: SEMICOLON,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: EOF,
+                expected_literal: "",
             },
         ];
 
