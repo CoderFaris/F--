@@ -1,10 +1,20 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+    sync::LazyLock,
+};
 
 pub type TokenType = &'static str;
 
 pub struct Token {
     pub token_type: TokenType,
     pub literal: String,
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(Type:{} Literal:{})", self.token_type, self.literal)
+    }
 }
 
 // code runs lazily on the first access, only declared here but not allocated or populated yet
