@@ -6,6 +6,7 @@ use std::{
 
 pub type TokenType = &'static str;
 
+#[derive(Debug, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub literal: String,
@@ -39,6 +40,7 @@ pub fn lookup_ident(ident: String) -> TokenType {
 
 pub const ILLEGAL: TokenType = "ILLEGAL";
 pub const EOF: TokenType = "EOF";
+pub const PLACEHOLDER: TokenType = "PLACEHOLDER";
 pub const IDENT: TokenType = "IDENT";
 pub const INT: TokenType = "INT";
 pub const ASSIGN: TokenType = "=";
