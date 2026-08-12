@@ -41,40 +41,40 @@ impl Lexer {
                     self.read_char();
                     let lit = String::from_utf8(vec![ch, self.ch]).expect("Invalid UTF-8 sequence");
                     Token {
-                        token_type: EQ,
+                        token_type: TokenType::EQ,
                         literal: lit,
                     }
                 } else {
-                    new_token(ASSIGN, self.ch)
+                    new_token(TokenType::Assign, self.ch)
                 }
             }
-            b';' => new_token(SEMICOLON, self.ch),
-            b'(' => new_token(LPAREN, self.ch),
-            b')' => new_token(RPAREN, self.ch),
-            b'{' => new_token(LBRACE, self.ch),
-            b'}' => new_token(RBRACE, self.ch),
-            b'+' => new_token(PLUS, self.ch),
-            b'-' => new_token(MINUS, self.ch),
-            b'*' => new_token(ASTERISK, self.ch),
-            b'/' => new_token(SLASH, self.ch),
-            b'<' => new_token(LT, self.ch),
-            b'>' => new_token(GT, self.ch),
+            b';' => new_token(TokenType::Semicolon, self.ch),
+            b'(' => new_token(TokenType::LParen, self.ch),
+            b')' => new_token(TokenType::RParen, self.ch),
+            b'{' => new_token(TokenType::LBrace, self.ch),
+            b'}' => new_token(TokenType::RBrace, self.ch),
+            b'+' => new_token(TokenType::Plus, self.ch),
+            b'-' => new_token(TokenType::Minus, self.ch),
+            b'*' => new_token(TokenType::Asterisk, self.ch),
+            b'/' => new_token(TokenType::Slash, self.ch),
+            b'<' => new_token(TokenType::LT, self.ch),
+            b'>' => new_token(TokenType::GT, self.ch),
             b'!' => {
                 if self.peek_char() == b'=' {
                     let ch = self.ch;
                     self.read_char();
                     let lit = String::from_utf8(vec![ch, self.ch]).expect("Invalid UTF-8 sequence");
                     Token {
-                        token_type: NOT_EQ,
+                        token_type: TokenType::NotEq,
                         literal: lit,
                     }
                 } else {
-                    new_token(BANG, self.ch)
+                    new_token(TokenType::Bang, self.ch)
                 }
             }
-            b',' => new_token(COMMA, self.ch),
+            b',' => new_token(TokenType::Comma, self.ch),
             0 => Token {
-                token_type: EOF,
+                token_type: TokenType::Eof,
                 literal: String::from(""),
             },
             0_u8..=60_u8 | 62_u8..=u8::MAX => {
@@ -92,7 +92,7 @@ impl Lexer {
                     };
                     // only supports integers for now
                 } else if is_digit(self.ch) {
-                    let tok_type = INT;
+                    let tok_type = TokenType::Int;
                     let lit = self.read_number();
                     let str_lit = match str::from_utf8(lit) {
                         Ok(v) => v,
@@ -104,7 +104,7 @@ impl Lexer {
                     };
                 } else {
                     Token {
-                        token_type: ILLEGAL,
+                        token_type: TokenType::Illegal,
                         literal: String::from(""),
                     }
                 }
@@ -148,7 +148,7 @@ impl Lexer {
     }
 }
 
-fn new_token(tokenType: &'static str, ch: u8) -> Token {
+fn new_token(tokenType: TokenType, ch: u8) -> Token {
     Token {
         token_type: tokenType,
         literal: (ch as char).to_string(),
@@ -196,299 +196,299 @@ mod tests {
 
         let tests = [
             TestType {
-                expected_type: LET,
+                expected_type: TokenType::Let,
                 expected_literal: "let",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "five",
             },
             TestType {
-                expected_type: ASSIGN,
+                expected_type: TokenType::Assign,
                 expected_literal: "=",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "5",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: LET,
+                expected_type: TokenType::Let,
                 expected_literal: "let",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "ten",
             },
             TestType {
-                expected_type: ASSIGN,
+                expected_type: TokenType::Assign,
                 expected_literal: "=",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "10",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: LET,
+                expected_type: TokenType::Let,
                 expected_literal: "let",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "add",
             },
             TestType {
-                expected_type: ASSIGN,
+                expected_type: TokenType::Assign,
                 expected_literal: "=",
             },
             TestType {
-                expected_type: FUNCTION,
+                expected_type: TokenType::Function,
                 expected_literal: "fn",
             },
             TestType {
-                expected_type: LPAREN,
+                expected_type: TokenType::LParen,
                 expected_literal: "(",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "x",
             },
             TestType {
-                expected_type: COMMA,
+                expected_type: TokenType::Comma,
                 expected_literal: ",",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "y",
             },
             TestType {
-                expected_type: RPAREN,
+                expected_type: TokenType::RParen,
                 expected_literal: ")",
             },
             TestType {
-                expected_type: LBRACE,
+                expected_type: TokenType::LBrace,
                 expected_literal: "{",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "x",
             },
             TestType {
-                expected_type: PLUS,
+                expected_type: TokenType::Plus,
                 expected_literal: "+",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "y",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: RBRACE,
+                expected_type: TokenType::RBrace,
                 expected_literal: "}",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: LET,
+                expected_type: TokenType::Let,
                 expected_literal: "let",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "result",
             },
             TestType {
-                expected_type: ASSIGN,
+                expected_type: TokenType::Assign,
                 expected_literal: "=",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "add",
             },
             TestType {
-                expected_type: LPAREN,
+                expected_type: TokenType::LParen,
                 expected_literal: "(",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "five",
             },
             TestType {
-                expected_type: COMMA,
+                expected_type: TokenType::Comma,
                 expected_literal: ",",
             },
             TestType {
-                expected_type: IDENT,
+                expected_type: TokenType::Ident,
                 expected_literal: "ten",
             },
             TestType {
-                expected_type: RPAREN,
+                expected_type: TokenType::RParen,
                 expected_literal: ")",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: BANG,
+                expected_type: TokenType::Bang,
                 expected_literal: "!",
             },
             TestType {
-                expected_type: MINUS,
+                expected_type: TokenType::Minus,
                 expected_literal: "-",
             },
             TestType {
-                expected_type: SLASH,
+                expected_type: TokenType::Slash,
                 expected_literal: "/",
             },
             TestType {
-                expected_type: ASTERISK,
+                expected_type: TokenType::Asterisk,
                 expected_literal: "*",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "5",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "5",
             },
             TestType {
-                expected_type: LT,
+                expected_type: TokenType::LT,
                 expected_literal: "<",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "10",
             },
             TestType {
-                expected_type: GT,
+                expected_type: TokenType::GT,
                 expected_literal: ">",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "5",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: IF,
+                expected_type: TokenType::If,
                 expected_literal: "if",
             },
             TestType {
-                expected_type: LPAREN,
+                expected_type: TokenType::LParen,
                 expected_literal: "(",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "5",
             },
             TestType {
-                expected_type: LT,
+                expected_type: TokenType::LT,
                 expected_literal: "<",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "10",
             },
             TestType {
-                expected_type: RPAREN,
+                expected_type: TokenType::RParen,
                 expected_literal: ")",
             },
             TestType {
-                expected_type: LBRACE,
+                expected_type: TokenType::LBrace,
                 expected_literal: "{",
             },
             TestType {
-                expected_type: RETURN,
+                expected_type: TokenType::Return,
                 expected_literal: "return",
             },
             TestType {
-                expected_type: TRUE,
+                expected_type: TokenType::True,
                 expected_literal: "true",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: RBRACE,
+                expected_type: TokenType::RBrace,
                 expected_literal: "}",
             },
             TestType {
-                expected_type: ELSE,
+                expected_type: TokenType::Else,
                 expected_literal: "else",
             },
             TestType {
-                expected_type: LBRACE,
+                expected_type: TokenType::LBrace,
                 expected_literal: "{",
             },
             TestType {
-                expected_type: RETURN,
+                expected_type: TokenType::Return,
                 expected_literal: "return",
             },
             TestType {
-                expected_type: FALSE,
+                expected_type: TokenType::False,
                 expected_literal: "false",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: RBRACE,
+                expected_type: TokenType::RBrace,
                 expected_literal: "}",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "10",
             },
             TestType {
-                expected_type: EQ,
+                expected_type: TokenType::EQ,
                 expected_literal: "==",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "10",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "10",
             },
             TestType {
-                expected_type: NOT_EQ,
+                expected_type: TokenType::NotEq,
                 expected_literal: "!=",
             },
             TestType {
-                expected_type: INT,
+                expected_type: TokenType::Int,
                 expected_literal: "9",
             },
             TestType {
-                expected_type: SEMICOLON,
+                expected_type: TokenType::Semicolon,
                 expected_literal: ";",
             },
             TestType {
-                expected_type: EOF,
+                expected_type: TokenType::Eof,
                 expected_literal: "",
             },
         ];
@@ -500,7 +500,7 @@ mod tests {
 
             assert_eq!(
                 tt.expected_type, token.token_type,
-                "tokentype wrong. expected={}, got={}",
+                "tokentype wrong. expected={:#?}, got={:#?}",
                 tt.expected_type, token.token_type
             );
             assert_eq!(

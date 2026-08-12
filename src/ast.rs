@@ -1,9 +1,10 @@
 use crate::token::Token;
 use std::any::Any;
+
 pub struct LetStatement {
     pub token: Token,
     pub name: Identifier,
-    pub value: Box<dyn Expression>,
+    pub value: Expression,
 }
 
 pub struct Identifier {
@@ -12,20 +13,16 @@ pub struct Identifier {
 }
 
 pub struct Program {
-    pub statements: Vec<Box<dyn Statement>>,
+    pub statements: Vec<Statement>,
 }
 
 pub trait Node: Any {
     fn token_literal(&self) -> String;
-    fn as_any(&self) -> &dyn Any;
 }
 
 impl Node for LetStatement {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -33,8 +30,22 @@ impl Node for Identifier {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
     }
-    fn as_any(&self) -> &dyn Any {
-        self
+}
+
+impl Node for Statement {
+    fn token_literal(&self) -> String {
+        match self {
+            Statement::Let(stmt) => stmt.token_literal(),
+        }
+    }
+}
+
+impl Node for Expression {
+    fn token_literal(&self) -> String {
+        match self {
+            Expression::Ident(i) => i.token_literal(),
+            Expression::Placeholder => String::from("delete this"),
+        }
     }
 }
 
@@ -46,10 +57,12 @@ impl Node for Program {
             String::new()
         }
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
-pub trait Statement: Node {}
-pub trait Expression: Node {}
+pub enum Statement {
+    Let(LetStatement),
+}
+pub enum Expression {
+    Ident(Identifier),
+    Placeholder, // delete this when starting to add expressions
+}

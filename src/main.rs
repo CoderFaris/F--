@@ -1,5 +1,5 @@
 use compiler::lexer::Lexer;
-use compiler::token::EOF;
+use compiler::token::TokenType;
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -23,7 +23,7 @@ fn driver() -> () {
         let mut l = Lexer::new(&text.to_string());
         // go through the tokens in the lexer
         let mut tok = l.next_token();
-        while tok.token_type != EOF {
+        while tok.token_type != TokenType::Eof {
             println!("{}", tok);
             tok = l.next_token();
         }
