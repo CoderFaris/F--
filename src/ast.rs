@@ -7,6 +7,11 @@ pub struct LetStatement {
     pub value: Expression,
 }
 
+pub struct ReturnStatement {
+    pub token: Token,
+    pub return_value: Expression,
+}
+
 pub struct Identifier {
     pub token: Token,
     pub value: String,
@@ -26,6 +31,12 @@ impl Node for LetStatement {
     }
 }
 
+impl Node for ReturnStatement {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
 impl Node for Identifier {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
@@ -36,6 +47,7 @@ impl Node for Statement {
     fn token_literal(&self) -> String {
         match self {
             Statement::Let(stmt) => stmt.token_literal(),
+            Statement::Return(stmt) => stmt.token_literal(),
         }
     }
 }
@@ -61,6 +73,7 @@ impl Node for Program {
 
 pub enum Statement {
     Let(LetStatement),
+    Return(ReturnStatement),
 }
 pub enum Expression {
     Ident(Identifier),

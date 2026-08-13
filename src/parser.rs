@@ -59,6 +59,7 @@ impl Parser {
     fn parse_statement(&mut self) -> Option<ast::Statement> {
         match self.curr_token.token_type {
             TokenType::Let => self.parse_let_statement().map(ast::Statement::Let),
+            TokenType::Return => self.parse_return_statement().map(ast::Statement::Return),
             _ => None,
         }
     }
@@ -88,6 +89,19 @@ impl Parser {
             token: token,
             name: name,
             value: ast::Expression::Placeholder,
+        })
+    }
+
+    fn parse_return_statement(&mut self) -> Option<ast::ReturnStatement> {
+        let token = self.curr_token.clone();
+
+        while !self.curr_token_is(TokenType::Semicolon) {
+            self.next_token();
+        }
+
+        Some(ast::ReturnStatement {
+            token: token,
+            return_value: ast::Expression::Placeholder,
         })
     }
 
@@ -173,27 +187,74 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_return_statements() {
+        let input = "
+        return 5;
+        return 10;
+        return 838383;
+        ";
+
+        let lexer = Lexer::new(input);
+        let mut parser: Parser = Parser::new(lexer);
+
+        let program = parser.parse();
+
+        check_parser_errors(&parser);
+
+        assert_eq!(
+            program.statements.len(),
+            3,
+            "program.statements does not have 3 statements; statements={}",
+            program.statements.len()
+        );
+
+        for tt in &program.statements {
+            if !test_return_statement(tt) {
+                return;
+            }
+        }
+    }
+
     fn test_let_statement(s: &ast::Statement, name: &'static str) -> bool {
-        let let_stmt = match s {
-            ast::Statement::Let(stmt) => stmt,
+        let let_stmt: Option<_> = match s {
+            ast::Statement::Let(stmt) => Some(stmt),
+            _ => None,
         };
-        if let_stmt.name.value != name {
+        if let_stmt.unwrap().name.value != name {
             println!(
                 "expected letstatement.name.value to be {}, got={}",
-                name, let_stmt.name.value
+                name,
+                let_stmt.unwrap().name.value
             );
             return false;
         }
 
-        if let_stmt.name.token_literal() != name {
+        if let_stmt.unwrap().name.token_literal() != name {
             println!(
                 "expected letstatement.name.token_literal() to be {}, got={}",
                 name,
-                let_stmt.name.token_literal()
+                let_stmt.unwrap().name.token_literal()
             );
             return false;
         }
 
+        true
+    }
+
+    fn test_return_statement(s: &ast::Statement) -> bool {
+        let ret_statement: Option<_> = match s {
+            ast::Statement::Return(stmt) => Some(stmt),
+            _ => None,
+        };
+
+        if ret_statement.unwrap().token_literal() != "return" {
+            println!(
+                "expected retstatement.token_literal to be 'return', got={}",
+                ret_statement.unwrap().token_literal()
+            );
+            return false;
+        }
         true
     }
 
