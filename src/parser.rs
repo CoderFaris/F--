@@ -8,6 +8,7 @@ pub struct Parser {
     lexer: Lexer,
     curr_token: Token,
     peek_token: Token,
+    errors: Vec<String>,
 }
 
 impl Parser {
@@ -22,6 +23,7 @@ impl Parser {
                 token_type: TokenType::Placeholder,
                 literal: String::from("PLACEHOLDER"),
             },
+            errors: Vec::new(),
         };
         // to set both curr and peek
         parser.next_token();
@@ -35,20 +37,28 @@ impl Parser {
         self.peek_token = self.lexer.next_token();
     }
 
-    fn parse(&self) -> ast::Program {
-        let program: ast::Program;
+    fn parse(&mut self) -> ast::Program {
+        let mut program = ast::Program {
+            statements: Vec::new(),
+        };
 
-        while self.curr_token != TokenType::Eof {
-            // this function will return option<some, none>
+        while !self.curr_token_is(TokenType::Eof) {
             let stmt = self.parse_statement();
-            // if it's some put the value in program statements array else don't
+
+            if stmt.is_some() {
+                program
+                    .statements
+                    .push(stmt.expect("statement should be added"));
+            }
+
             self.next_token();
         }
+        program
     }
 
-    fn parse_statement(&self) -> Option<ast::Statement> {
+    fn parse_statement(&mut self) -> Option<ast::Statement> {
         match self.curr_token.token_type {
-            TokenType::Let => self.parse_let_statement(),
+            TokenType::Let => self.parse_let_statement().map(ast::Statement::Let),
             _ => None,
         }
     }
@@ -94,8 +104,22 @@ impl Parser {
             self.next_token();
             return true;
         } else {
+            self.peek_error(token);
             return false;
         }
+    }
+
+    fn peek_error(&mut self, token: TokenType) {
+        let error_message = format!(
+            "Expected next token to be: {:#?}, got {:#?}",
+            token, self.peek_token.token_type
+        );
+
+        self.errors.push(error_message);
+    }
+
+    fn errors(&self) -> Vec<String> {
+        self.errors.clone()
     }
 }
 
@@ -113,9 +137,11 @@ mod tests {
         ";
 
         let lexer = Lexer::new(input);
-        let parser: Parser = Parser::new(lexer);
+        let mut parser: Parser = Parser::new(lexer);
 
         let program = parser.parse();
+
+        check_parser_errors(&parser);
 
         assert_eq!(
             program.statements.len(),
@@ -169,5 +195,17 @@ mod tests {
         }
 
         true
+    }
+
+    fn check_parser_errors(parser: &Parser) {
+        let errors = parser.errors();
+        if errors.is_empty() {
+            return;
+        }
+        eprintln!("parser has {:#?} errors", errors.len());
+        for e in errors {
+            eprintln!("parser error: {}", e);
+        }
+        panic!("parser errors");
     }
 }
