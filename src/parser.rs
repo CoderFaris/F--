@@ -1,5 +1,5 @@
 use iota::iota;
-use std::collections::HashMap;
+use std::{collections::HashMap, num::ParseIntError};
 
 use crate::{
     ast::{self, Node},
@@ -16,7 +16,7 @@ pub struct Parser {
     infix_parse_fn: HashMap<TokenType, InfixParseFn>,
 }
 
-type PrefixParseFn = fn(&mut Parser) -> ast::Expression;
+type PrefixParseFn = fn(&mut Parser) -> Option<ast::Expression>;
 type InfixParseFn = fn(&mut Parser, ast::Expression) -> ast::Expression;
 
 iota!(
@@ -50,6 +50,10 @@ impl Parser {
         parser
             .prefix_parse_fn
             .insert(TokenType::Ident, Parser::parse_identifier);
+
+        parser
+            .prefix_parse_fn
+            .insert(TokenType::Int, Parser::parse_integer_literal);
         // to set both curr and peek
         parser.next_token();
         parser.next_token();
@@ -151,14 +155,35 @@ impl Parser {
         let prefix = self.prefix_parse_fn[&self.curr_token.token_type];
 
         let left_exp = prefix(self);
-        Some(left_exp)
+        match left_exp {
+            Some(expr) => Some(expr),
+            None => {
+                self.errors.push("error when parsing left_exp".to_string());
+                None
+            }
+        }
     }
 
-    fn parse_identifier(&mut self) -> ast::Expression {
-        return ast::Expression::Ident(ast::Identifier {
+    fn parse_identifier(&mut self) -> Option<ast::Expression> {
+        return Some(ast::Expression::Ident(ast::Identifier {
             token: self.curr_token.clone(),
             value: self.curr_token.literal.clone(),
-        });
+        }));
+    }
+
+    fn parse_integer_literal(&mut self) -> Option<ast::Expression> {
+        match self.curr_token.literal.parse::<isize>() {
+            Ok(v) => {
+                return Some(ast::Expression::Int(ast::IntegerLiteral {
+                    token: self.curr_token.clone(),
+                    value: v,
+                }));
+            }
+            Err(e) => {
+                self.errors.push(e.to_string());
+                None
+            }
+        }
     }
 
     fn curr_token_is(&self, token: TokenType) -> bool {
@@ -362,6 +387,47 @@ mod tests {
             "foobar",
             "unexpected token_literal, got={}",
             ident_unwrapped.token_literal()
+        );
+    }
+
+    #[test]
+    fn test_integer_literal_expression() {
+        let input = "5;";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expression_stmt: Option<_> = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let expr: ast::Expression = expression_stmt.unwrap().expression.clone();
+
+        let int_lit: Option<_> = match expr {
+            ast::Expression::Int(int) => Some(int),
+            _ => None,
+        };
+
+        let integer_literal = int_lit.unwrap();
+
+        assert_eq!(
+            integer_literal.token.literal, "5",
+            "unexpected token_literal, got={}",
+            integer_literal.token.literal
+        );
+        assert_eq!(
+            integer_literal.value, 5,
+            "unexpected value, got={}",
+            integer_literal.value,
         );
     }
 

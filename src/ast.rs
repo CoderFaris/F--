@@ -23,6 +23,12 @@ pub struct Identifier {
     pub value: String,
 }
 
+#[derive(Clone)]
+pub struct IntegerLiteral {
+    pub token: Token,
+    pub value: isize,
+}
+
 pub struct Program {
     pub statements: Vec<Statement>,
 }
@@ -88,6 +94,16 @@ impl Node for Identifier {
     }
 }
 
+impl Node for IntegerLiteral {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        self.value.to_string()
+    }
+}
+
 impl Node for Statement {
     fn token_literal(&self) -> String {
         match self {
@@ -110,6 +126,7 @@ impl Node for Expression {
     fn token_literal(&self) -> String {
         match self {
             Expression::Ident(i) => i.token_literal(),
+            Expression::Int(int) => int.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -117,6 +134,7 @@ impl Node for Expression {
     fn string(&self) -> String {
         match self {
             Expression::Ident(i) => i.string(),
+            Expression::Int(int) => int.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -149,6 +167,7 @@ pub enum Statement {
 #[derive(Clone)]
 pub enum Expression {
     Ident(Identifier),
+    Int(IntegerLiteral),
     Placeholder, // delete this when starting to add expressions
 }
 
