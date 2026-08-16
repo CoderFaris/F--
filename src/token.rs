@@ -4,7 +4,7 @@ use std::{
     sync::LazyLock,
 };
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone, Copy)]
 pub enum TokenType {
     Illegal,
     Eof,

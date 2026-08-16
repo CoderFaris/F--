@@ -1,3 +1,6 @@
+use iota::iota;
+use std::collections::HashMap;
+
 use crate::{
     ast::{self, Node},
     lexer::Lexer,
@@ -9,7 +12,22 @@ pub struct Parser {
     curr_token: Token,
     peek_token: Token,
     errors: Vec<String>,
+    prefix_parse_fn: HashMap<TokenType, PrefixParseFn>,
+    infix_parse_fn: HashMap<TokenType, InfixParseFn>,
 }
+
+type PrefixParseFn = fn(&mut Parser) -> ast::Expression;
+type InfixParseFn = fn(&mut Parser, ast::Expression) -> ast::Expression;
+
+iota!(
+    const LOWEST: u32 = iota + 1;
+    const EQUALS: u32 = iota + 1;
+    const LESSGREATER: u32 = iota + 1;
+    const SUM: u32 = iota + 1;
+    const PRODUCT: u32 = iota + 1;
+    const PREFIX: u32 = iota + 1;
+    const CALL: u32 = iota + 1;
+);
 
 impl Parser {
     fn new(lxr: Lexer) -> Parser {
@@ -24,7 +42,14 @@ impl Parser {
                 literal: String::from("PLACEHOLDER"),
             },
             errors: Vec::new(),
+            prefix_parse_fn: HashMap::new(),
+            infix_parse_fn: HashMap::new(),
         };
+
+        // filling out prefix and infix maps with appropriate functions
+        parser
+            .prefix_parse_fn
+            .insert(TokenType::Ident, Parser::parse_identifier);
         // to set both curr and peek
         parser.next_token();
         parser.next_token();
@@ -60,7 +85,9 @@ impl Parser {
         match self.curr_token.token_type {
             TokenType::Let => self.parse_let_statement().map(ast::Statement::Let),
             TokenType::Return => self.parse_return_statement().map(ast::Statement::Return),
-            _ => None,
+            _ => self
+                .parse_expression_statement()
+                .map(ast::Statement::Expression),
         }
     }
 
@@ -105,6 +132,35 @@ impl Parser {
         })
     }
 
+    fn parse_expression_statement(&mut self) -> Option<ast::ExpressionStatement> {
+        let token = self.curr_token.clone();
+        let expression = self.parse_expression(LOWEST);
+
+        // semicolon required
+        if !self.expect_peek(TokenType::Semicolon) {
+            return None;
+        }
+
+        Some(ast::ExpressionStatement {
+            token: token,
+            expression: expression.unwrap(),
+        })
+    }
+
+    fn parse_expression(&mut self, precedence: u32) -> Option<ast::Expression> {
+        let prefix = self.prefix_parse_fn[&self.curr_token.token_type];
+
+        let left_exp = prefix(self);
+        Some(left_exp)
+    }
+
+    fn parse_identifier(&mut self) -> ast::Expression {
+        return ast::Expression::Ident(ast::Identifier {
+            token: self.curr_token.clone(),
+            value: self.curr_token.literal.clone(),
+        });
+    }
+
     fn curr_token_is(&self, token: TokenType) -> bool {
         return self.curr_token.token_type == token;
     }
@@ -134,6 +190,14 @@ impl Parser {
 
     fn errors(&self) -> Vec<String> {
         self.errors.clone()
+    }
+
+    fn register_prefix(&mut self, token_type: TokenType, function: PrefixParseFn) {
+        self.prefix_parse_fn.insert(token_type, function);
+    }
+
+    fn register_infix(&mut self, token_type: TokenType, function: InfixParseFn) {
+        self.infix_parse_fn.insert(token_type, function);
     }
 }
 
@@ -256,6 +320,49 @@ mod tests {
             return false;
         }
         true
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let input = "foobar;";
+
+        let lexer = Lexer::new(input);
+        let mut p = Parser::new(lexer);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expression_stmt: Option<_> = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let expr: ast::Expression = expression_stmt.unwrap().expression.clone();
+
+        let ident: Option<_> = match expr {
+            ast::Expression::Ident(i) => Some(i),
+            _ => None,
+        };
+
+        let ident_unwrapped = ident.unwrap();
+
+        assert_eq!(
+            ident_unwrapped.value, "foobar",
+            "unexpected value, got={}",
+            ident_unwrapped.value
+        );
+        assert_eq!(
+            ident_unwrapped.token_literal(),
+            "foobar",
+            "unexpected token_literal, got={}",
+            ident_unwrapped.token_literal()
+        );
     }
 
     fn check_parser_errors(parser: &Parser) {

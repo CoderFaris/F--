@@ -17,6 +17,7 @@ pub struct ExpressionStatement {
     pub expression: Expression,
 }
 
+#[derive(Clone)]
 pub struct Identifier {
     pub token: Token,
     pub value: String,
@@ -144,6 +145,8 @@ pub enum Statement {
     Return(ReturnStatement),
     Expression(ExpressionStatement),
 }
+
+#[derive(Clone)]
 pub enum Expression {
     Ident(Identifier),
     Placeholder, // delete this when starting to add expressions
