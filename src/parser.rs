@@ -54,6 +54,12 @@ impl Parser {
         parser
             .prefix_parse_fn
             .insert(TokenType::Int, Parser::parse_integer_literal);
+        parser
+            .prefix_parse_fn
+            .insert(TokenType::Bang, Parser::parse_prefix_expression);
+        parser
+            .prefix_parse_fn
+            .insert(TokenType::Minus, Parser::parse_prefix_expression);
         // to set both curr and peek
         parser.next_token();
         parser.next_token();
@@ -151,10 +157,30 @@ impl Parser {
         })
     }
 
-    fn parse_expression(&mut self, precedence: u32) -> Option<ast::Expression> {
-        let prefix = self.prefix_parse_fn[&self.curr_token.token_type];
+    fn parse_prefix_expression(&mut self) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+        let operator = self.curr_token.literal.clone();
+        self.next_token();
+        let expression_right = self.parse_expression(LOWEST);
+        Some(ast::Expression::Prefix(Box::new(ast::PrefixExpression {
+            token: token,
+            operator: operator,
+            right: expression_right.unwrap(),
+        })))
+    }
 
-        let left_exp = prefix(self);
+    fn parse_expression(&mut self, precedence: u32) -> Option<ast::Expression> {
+        let prefix = self
+            .prefix_parse_fn
+            .get(&self.curr_token.token_type)
+            .copied();
+
+        if prefix.is_none() {
+            self.no_prefix_parse_fn(self.curr_token.token_type);
+            return None;
+        }
+
+        let left_exp = prefix.unwrap()(self);
         match left_exp {
             Some(expr) => Some(expr),
             None => {
@@ -215,6 +241,11 @@ impl Parser {
 
     fn errors(&self) -> Vec<String> {
         self.errors.clone()
+    }
+
+    fn no_prefix_parse_fn(&mut self, token: TokenType) {
+        let err_msg = format!("No prefix parse function for {:#?} found", token);
+        self.errors.push(err_msg);
     }
 
     fn register_prefix(&mut self, token_type: TokenType, function: PrefixParseFn) {
@@ -431,6 +462,42 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_parsing_prefix_expressions() {
+        struct TestType {
+            input: &'static str,
+            operator: &'static str,
+            integer_val: isize,
+        };
+
+        let testcases = [
+            TestType {
+                input: "!5;",
+                operator: "!",
+                integer_val: 5,
+            },
+            TestType {
+                input: "-15;",
+                operator: "-",
+                integer_val: 15,
+            },
+        ];
+
+        for tt in &testcases {
+            let l = Lexer::new(tt.input);
+            let mut p = Parser::new(l);
+            let program = p.parse();
+            check_parser_errors(&p);
+
+            assert_eq!(
+                program.statements.len(),
+                1,
+                "program does not have enough statements, got={}",
+                program.statements.len()
+            );
+        }
+    }
+
     fn check_parser_errors(parser: &Parser) {
         let errors = parser.errors();
         if errors.is_empty() {
@@ -441,5 +508,29 @@ mod tests {
             eprintln!("parser error: {}", e);
         }
         panic!("parser errors");
+    }
+
+    fn test_integer_literal(integer_literal: ast::Expression, value: isize) -> bool {
+        let int_literal = match integer_literal {
+            ast::Expression::Int(i) => Some(i),
+            _ => {
+                eprintln!("integer_literal is not an integer literal");
+                return false;
+            }
+        };
+        let i_lit = int_literal.unwrap();
+        assert_eq!(
+            i_lit.value, value,
+            "integer_literal value not={}, got={}",
+            value, i_lit.value
+        );
+        assert_eq!(
+            i_lit.token.literal,
+            value.to_string(),
+            "integer_literal token literal not={}, got={}",
+            value.to_string(),
+            i_lit.token.literal
+        );
+        return true;
     }
 }
