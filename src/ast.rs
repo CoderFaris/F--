@@ -25,6 +25,14 @@ pub struct PrefixExpression {
 }
 
 #[derive(Clone)]
+pub struct InfixExpression {
+    pub token: Token,
+    pub left: Expression,
+    pub operator: String,
+    pub right: Expression,
+}
+
+#[derive(Clone)]
 pub struct Identifier {
     pub token: Token,
     pub value: String,
@@ -107,6 +115,25 @@ impl Node for PrefixExpression {
     }
 }
 
+impl Node for InfixExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        let mut s = String::new();
+
+        s += "(";
+        s += &self.left.string();
+        s += " ";
+        s += &self.operator[..];
+        s += " ";
+        s += &self.right.string();
+        s += ")";
+        s
+    }
+}
+
 impl Node for Identifier {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
@@ -150,6 +177,7 @@ impl Node for Expression {
             Expression::Ident(i) => i.token_literal(),
             Expression::Int(int) => int.token_literal(),
             Expression::Prefix(pre) => pre.token_literal(),
+            Expression::Infix(inf) => inf.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -159,6 +187,7 @@ impl Node for Expression {
             Expression::Ident(i) => i.string(),
             Expression::Int(int) => int.string(),
             Expression::Prefix(pre) => pre.string(),
+            Expression::Infix(inf) => inf.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -193,6 +222,7 @@ pub enum Expression {
     Ident(Identifier),
     Int(IntegerLiteral),
     Prefix(Box<PrefixExpression>),
+    Infix(Box<InfixExpression>),
     Placeholder, // delete this when starting to add expressions
 }
 

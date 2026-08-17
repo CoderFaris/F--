@@ -1,11 +1,25 @@
 use iota::iota;
-use std::{collections::HashMap, num::ParseIntError};
+use std::{collections::HashMap, hash::Hash, sync::LazyLock};
 
 use crate::{
     ast::{self, Node},
     lexer::Lexer,
     token::{self, Token, TokenType},
 };
+
+static PRECEDENDES: LazyLock<HashMap<TokenType, isize>> = LazyLock::new(|| {
+    let mut precedences: HashMap<TokenType, isize> = HashMap::new();
+    precedences.insert(TokenType::EQ, EQUALS);
+    precedences.insert(TokenType::NotEq, EQUALS);
+    precedences.insert(TokenType::LT, LESSGREATER);
+    precedences.insert(TokenType::GT, LESSGREATER);
+    precedences.insert(TokenType::Plus, SUM);
+    precedences.insert(TokenType::Minus, SUM);
+    precedences.insert(TokenType::Asterisk, PRODUCT);
+    precedences.insert(TokenType::Slash, PRODUCT);
+
+    precedences
+});
 
 pub struct Parser {
     lexer: Lexer,
@@ -20,13 +34,13 @@ type PrefixParseFn = fn(&mut Parser) -> Option<ast::Expression>;
 type InfixParseFn = fn(&mut Parser, ast::Expression) -> ast::Expression;
 
 iota!(
-    const LOWEST: u32 = iota + 1;
-    const EQUALS: u32 = iota + 1;
-    const LESSGREATER: u32 = iota + 1;
-    const SUM: u32 = iota + 1;
-    const PRODUCT: u32 = iota + 1;
-    const PREFIX: u32 = iota + 1;
-    const CALL: u32 = iota + 1;
+    const LOWEST: isize = iota + 1;
+    const EQUALS: isize = iota + 1;
+    const LESSGREATER: isize = iota + 1;
+    const SUM: isize = iota + 1;
+    const PRODUCT: isize = iota + 1;
+    const PREFIX: isize = iota + 1;
+    const CALL: isize = iota + 1;
 );
 
 impl Parser {
@@ -169,7 +183,7 @@ impl Parser {
         })))
     }
 
-    fn parse_expression(&mut self, precedence: u32) -> Option<ast::Expression> {
+    fn parse_expression(&mut self, precedence: isize) -> Option<ast::Expression> {
         let prefix = self
             .prefix_parse_fn
             .get(&self.curr_token.token_type)
@@ -241,6 +255,24 @@ impl Parser {
 
     fn errors(&self) -> Vec<String> {
         self.errors.clone()
+    }
+
+    fn peek_precedence(&self) -> isize {
+        let precedence = PRECEDENDES.get(&self.peek_token.token_type);
+        if precedence.is_some() {
+            *precedence.unwrap()
+        } else {
+            LOWEST
+        }
+    }
+
+    fn curr_precedence(&self) -> isize {
+        let precedence = PRECEDENDES.get(&self.curr_token.token_type);
+        if precedence.is_some() {
+            *precedence.unwrap()
+        } else {
+            LOWEST
+        }
     }
 
     fn no_prefix_parse_fn(&mut self, token: TokenType) {
@@ -495,6 +527,129 @@ mod tests {
                 "program does not have enough statements, got={}",
                 program.statements.len()
             );
+
+            let expression_stmt = match &program.statements[0] {
+                ast::Statement::Expression(expr) => Some(expr),
+                _ => None,
+            };
+
+            let prefix_exp = match &expression_stmt.unwrap().expression {
+                ast::Expression::Prefix(pre) => Some(pre),
+                _ => None,
+            };
+
+            let prefix_unwrapped = prefix_exp.unwrap();
+
+            assert_eq!(
+                prefix_unwrapped.operator, tt.operator,
+                "prefix_operator is not={}, got={}",
+                tt.operator, prefix_unwrapped.operator
+            );
+
+            if !test_integer_literal(prefix_unwrapped.right.clone(), tt.integer_val) {
+                return;
+            }
+        }
+    }
+
+    #[test]
+    fn test_parsing_infix_expressions() {
+        struct TestType {
+            input: &'static str,
+            left_value: isize,
+            operator: &'static str,
+            right_value: isize,
+        };
+
+        let testcases = [
+            TestType {
+                input: "5 + 5;",
+                left_value: 5,
+                operator: "+",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 - 5;",
+                left_value: 5,
+                operator: "-",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 * 5;",
+                left_value: 5,
+                operator: "*",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 / 5;",
+                left_value: 5,
+                operator: "/",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 > 5;",
+                left_value: 5,
+                operator: ">",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 < 5;",
+                left_value: 5,
+                operator: "<",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 == 5;",
+                left_value: 5,
+                operator: "==",
+                right_value: 5,
+            },
+            TestType {
+                input: "5 != 5;",
+                left_value: 5,
+                operator: "!=",
+                right_value: 5,
+            },
+        ];
+
+        for tt in &testcases {
+            let l = Lexer::new(tt.input);
+            let mut p = Parser::new(l);
+            let program = p.parse();
+            check_parser_errors(&p);
+
+            assert_eq!(
+                program.statements.len(),
+                1,
+                "program does not have enough statements, got={}",
+                program.statements.len()
+            );
+
+            let expression_stmt = match &program.statements[0] {
+                ast::Statement::Expression(expr) => Some(expr),
+                _ => None,
+            };
+
+            let infix_expr = match &expression_stmt.unwrap().expression {
+                ast::Expression::Infix(inf) => Some(inf),
+                _ => None,
+            };
+
+            let infix_unwrapped = infix_expr.unwrap();
+
+            if !test_integer_literal(infix_unwrapped.left.clone(), tt.left_value) {
+                return;
+            }
+
+            assert_eq!(
+                infix_unwrapped.operator, tt.operator,
+                "prefix_operator is not={}, got={}",
+                tt.operator, infix_unwrapped.operator
+            );
+
+            if !test_integer_literal(infix_unwrapped.right.clone(), tt.right_value) {
+                return;
+            }
         }
     }
 
