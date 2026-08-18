@@ -31,7 +31,7 @@ pub struct Parser {
 }
 
 type PrefixParseFn = fn(&mut Parser) -> Option<ast::Expression>;
-type InfixParseFn = fn(&mut Parser, ast::Expression) -> ast::Expression;
+type InfixParseFn = fn(&mut Parser, ast::Expression) -> Option<ast::Expression>;
 
 iota!(
     const LOWEST: isize = iota + 1;
@@ -61,19 +61,18 @@ impl Parser {
         };
 
         // filling out prefix and infix maps with appropriate functions
-        parser
-            .prefix_parse_fn
-            .insert(TokenType::Ident, Parser::parse_identifier);
-
-        parser
-            .prefix_parse_fn
-            .insert(TokenType::Int, Parser::parse_integer_literal);
-        parser
-            .prefix_parse_fn
-            .insert(TokenType::Bang, Parser::parse_prefix_expression);
-        parser
-            .prefix_parse_fn
-            .insert(TokenType::Minus, Parser::parse_prefix_expression);
+        parser.register_prefix(TokenType::Ident, Parser::parse_identifier);
+        parser.register_prefix(TokenType::Int, Parser::parse_integer_literal);
+        parser.register_prefix(TokenType::Bang, Parser::parse_prefix_expression);
+        parser.register_prefix(TokenType::Minus, Parser::parse_prefix_expression);
+        parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::Asterisk, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::Slash, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::EQ, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::NotEq, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::LT, Parser::parse_infix_expression);
+        parser.register_infix(TokenType::GT, Parser::parse_infix_expression);
         // to set both curr and peek
         parser.next_token();
         parser.next_token();
@@ -175,11 +174,26 @@ impl Parser {
         let token = self.curr_token.clone();
         let operator = self.curr_token.literal.clone();
         self.next_token();
-        let expression_right = self.parse_expression(LOWEST);
+        let expression_right = self.parse_expression(PREFIX);
         Some(ast::Expression::Prefix(Box::new(ast::PrefixExpression {
             token: token,
             operator: operator,
             right: expression_right.unwrap(),
+        })))
+    }
+
+    fn parse_infix_expression(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+        let operator = self.curr_token.literal.clone();
+
+        let precedence = self.curr_precedence();
+        self.next_token();
+        let right = self.parse_expression(precedence);
+        Some(ast::Expression::Infix(Box::new(ast::InfixExpression {
+            token: token,
+            operator: operator,
+            left: left,
+            right: right?,
         })))
     }
 
@@ -194,14 +208,21 @@ impl Parser {
             return None;
         }
 
-        let left_exp = prefix.unwrap()(self);
-        match left_exp {
-            Some(expr) => Some(expr),
-            None => {
-                self.errors.push("error when parsing left_exp".to_string());
-                None
+        let mut left_exp = prefix.unwrap()(self);
+
+        while !self.peek_token_is(TokenType::Semicolon) && precedence < self.peek_precedence() {
+            let infix = self
+                .infix_parse_fn
+                .get(&self.peek_token.token_type)
+                .copied();
+            if infix.is_none() {
+                return left_exp;
             }
+            self.next_token();
+            left_exp = infix.unwrap()(self, left_exp?);
         }
+
+        left_exp
     }
 
     fn parse_identifier(&mut self) -> Option<ast::Expression> {
@@ -650,6 +671,79 @@ mod tests {
             if !test_integer_literal(infix_unwrapped.right.clone(), tt.right_value) {
                 return;
             }
+        }
+    }
+
+    #[test]
+    fn test_operator_precedence_parsing() {
+        struct TestType {
+            input: String,
+            expected: String,
+        }
+
+        let testcases = [
+            TestType {
+                input: "-a * b;".to_string(),
+                expected: "((-a) * b)".to_string(),
+            },
+            TestType {
+                input: "!-a;".to_string(),
+                expected: "(!(-a))".to_string(),
+            },
+            TestType {
+                input: "a + b + c;".to_string(),
+                expected: "((a + b) + c)".to_string(),
+            },
+            TestType {
+                input: "a + b - c;".to_string(),
+                expected: "((a + b) - c)".to_string(),
+            },
+            TestType {
+                input: "a * b * c;".to_string(),
+                expected: "((a * b) * c)".to_string(),
+            },
+            TestType {
+                input: "a * b / c;".to_string(),
+                expected: "((a * b) / c)".to_string(),
+            },
+            TestType {
+                input: "a + b / c;".to_string(),
+                expected: "(a + (b / c))".to_string(),
+            },
+            TestType {
+                input: "3 + 4; -5 * 5;".to_string(),
+                expected: "(3 + 4)((-5) * 5)".to_string(),
+            },
+            TestType {
+                input: "5 > 4 == 3 < 4;".to_string(),
+                expected: "((5 > 4) == (3 < 4))".to_string(),
+            },
+            TestType {
+                input: "5 < 4 != 3 > 4;".to_string(),
+                expected: "((5 < 4) != (3 > 4))".to_string(),
+            },
+            TestType {
+                input: "3 + 4 * 5 == 3 * 1 + 4 * 5;".to_string(),
+                expected: "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))".to_string(),
+            },
+            TestType {
+                input: "a + b * c + d / e - f;".to_string(),
+                expected: "(((a + (b * c)) + (d / e)) - f)".to_string(),
+            },
+        ];
+
+        for tt in &testcases {
+            let l = Lexer::new(&tt.input[..]);
+            let mut p = Parser::new(l);
+            let program = p.parse();
+            check_parser_errors(&p);
+
+            let actual = program.string();
+            assert_eq!(
+                actual, tt.expected,
+                "expected={}, got={}",
+                tt.expected, actual
+            );
         }
     }
 

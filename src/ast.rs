@@ -93,10 +93,7 @@ impl Node for ExpressionStatement {
     }
 
     fn string(&self) -> String {
-        match &self.expression {
-            Expression::Ident(i) => i.value.clone(),
-            _ => String::new(),
-        }
+        self.expression.string()
     }
 }
 
