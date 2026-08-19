@@ -44,6 +44,12 @@ pub struct IntegerLiteral {
     pub value: isize,
 }
 
+#[derive(Clone)]
+pub struct Boolean {
+    pub token: Token,
+    pub value: bool,
+}
+
 pub struct Program {
     pub statements: Vec<Statement>,
 }
@@ -150,6 +156,16 @@ impl Node for IntegerLiteral {
     }
 }
 
+impl Node for Boolean {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
 impl Node for Statement {
     fn token_literal(&self) -> String {
         match self {
@@ -173,6 +189,7 @@ impl Node for Expression {
         match self {
             Expression::Ident(i) => i.token_literal(),
             Expression::Int(int) => int.token_literal(),
+            Expression::Bool(b) => b.token_literal(),
             Expression::Prefix(pre) => pre.token_literal(),
             Expression::Infix(inf) => inf.token_literal(),
             Expression::Placeholder => String::from("delete this"),
@@ -183,6 +200,7 @@ impl Node for Expression {
         match self {
             Expression::Ident(i) => i.string(),
             Expression::Int(int) => int.string(),
+            Expression::Bool(b) => b.string(),
             Expression::Prefix(pre) => pre.string(),
             Expression::Infix(inf) => inf.string(),
             Expression::Placeholder => String::from("delete this"),
@@ -218,6 +236,7 @@ pub enum Statement {
 pub enum Expression {
     Ident(Identifier),
     Int(IntegerLiteral),
+    Bool(Boolean),
     Prefix(Box<PrefixExpression>),
     Infix(Box<InfixExpression>),
     Placeholder, // delete this when starting to add expressions

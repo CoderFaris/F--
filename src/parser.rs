@@ -65,6 +65,8 @@ impl Parser {
         parser.register_prefix(TokenType::Int, Parser::parse_integer_literal);
         parser.register_prefix(TokenType::Bang, Parser::parse_prefix_expression);
         parser.register_prefix(TokenType::Minus, Parser::parse_prefix_expression);
+        parser.register_prefix(TokenType::True, Parser::parse_boolean);
+        parser.register_prefix(TokenType::False, Parser::parse_boolean);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Asterisk, Parser::parse_infix_expression);
@@ -247,6 +249,13 @@ impl Parser {
         }
     }
 
+    fn parse_boolean(&mut self) -> Option<ast::Expression> {
+        Some(ast::Expression::Bool(ast::Boolean {
+            token: self.curr_token.clone(),
+            value: self.curr_token_is(TokenType::True),
+        }))
+    }
+
     fn curr_token_is(&self, token: TokenType) -> bool {
         return self.curr_token.token_type == token;
     }
@@ -314,6 +323,12 @@ impl Parser {
 mod tests {
 
     use super::*;
+
+    enum TestLiteral {
+        Int(isize),
+        Bool(bool),
+        Ident(String),
+    }
 
     #[test]
     fn test_let_statements() {
@@ -516,23 +531,75 @@ mod tests {
     }
 
     #[test]
+    fn test_boolean_expression() {
+        let input = "true;";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expression_stmt = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let expr: ast::Expression = expression_stmt.unwrap().expression.clone();
+
+        let bool_lit = match expr {
+            ast::Expression::Bool(b) => Some(b),
+            _ => None,
+        };
+
+        let boolean_literal = bool_lit.unwrap();
+
+        assert_eq!(
+            boolean_literal.token.literal, "true",
+            "unexpected token_literal, got={}",
+            boolean_literal.token.literal
+        );
+
+        assert_eq!(
+            boolean_literal.value, true,
+            "unexpected token.value, got={}",
+            boolean_literal.value
+        );
+    }
+
+    #[test]
     fn test_parsing_prefix_expressions() {
         struct TestType {
             input: &'static str,
             operator: &'static str,
-            integer_val: isize,
+            value: TestLiteral,
         };
 
         let testcases = [
             TestType {
                 input: "!5;",
                 operator: "!",
-                integer_val: 5,
+                value: TestLiteral::Int(5),
             },
             TestType {
                 input: "-15;",
                 operator: "-",
-                integer_val: 15,
+                value: TestLiteral::Int(15),
+            },
+            TestType {
+                input: "!true;",
+                operator: "!",
+                value: TestLiteral::Bool(true),
+            },
+            TestType {
+                input: "!false;",
+                operator: "!",
+                value: TestLiteral::Bool(false),
             },
         ];
 
@@ -554,22 +621,11 @@ mod tests {
                 _ => None,
             };
 
-            let prefix_exp = match &expression_stmt.unwrap().expression {
-                ast::Expression::Prefix(pre) => Some(pre),
-                _ => None,
-            };
-
-            let prefix_unwrapped = prefix_exp.unwrap();
-
-            assert_eq!(
-                prefix_unwrapped.operator, tt.operator,
-                "prefix_operator is not={}, got={}",
-                tt.operator, prefix_unwrapped.operator
+            test_prefix_expression(
+                expression_stmt.unwrap().expression.clone(),
+                tt.operator.to_string(),
+                &tt.value,
             );
-
-            if !test_integer_literal(prefix_unwrapped.right.clone(), tt.integer_val) {
-                return;
-            }
         }
     }
 
@@ -577,59 +633,77 @@ mod tests {
     fn test_parsing_infix_expressions() {
         struct TestType {
             input: &'static str,
-            left_value: isize,
+            left_value: TestLiteral,
             operator: &'static str,
-            right_value: isize,
+            right_value: TestLiteral,
         };
 
         let testcases = [
             TestType {
                 input: "5 + 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "+",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 - 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "-",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 * 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "*",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 / 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "/",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 > 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: ">",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 < 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "<",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 == 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "==",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
             },
             TestType {
                 input: "5 != 5;",
-                left_value: 5,
+                left_value: TestLiteral::Int(5),
                 operator: "!=",
-                right_value: 5,
+                right_value: TestLiteral::Int(5),
+            },
+            TestType {
+                input: "true == true;",
+                left_value: TestLiteral::Bool(true),
+                operator: "==",
+                right_value: TestLiteral::Bool(true),
+            },
+            TestType {
+                input: "true != false;",
+                left_value: TestLiteral::Bool(true),
+                operator: "!=",
+                right_value: TestLiteral::Bool(false),
+            },
+            TestType {
+                input: "false == false;",
+                left_value: TestLiteral::Bool(false),
+                operator: "==",
+                right_value: TestLiteral::Bool(false),
             },
         ];
 
@@ -651,26 +725,12 @@ mod tests {
                 _ => None,
             };
 
-            let infix_expr = match &expression_stmt.unwrap().expression {
-                ast::Expression::Infix(inf) => Some(inf),
-                _ => None,
-            };
-
-            let infix_unwrapped = infix_expr.unwrap();
-
-            if !test_integer_literal(infix_unwrapped.left.clone(), tt.left_value) {
-                return;
-            }
-
-            assert_eq!(
-                infix_unwrapped.operator, tt.operator,
-                "prefix_operator is not={}, got={}",
-                tt.operator, infix_unwrapped.operator
+            test_infix_expression(
+                expression_stmt.unwrap().expression.clone(),
+                &tt.left_value,
+                tt.operator.to_string(),
+                &tt.right_value,
             );
-
-            if !test_integer_literal(infix_unwrapped.right.clone(), tt.right_value) {
-                return;
-            }
         }
     }
 
@@ -730,6 +790,22 @@ mod tests {
                 input: "a + b * c + d / e - f;".to_string(),
                 expected: "(((a + (b * c)) + (d / e)) - f)".to_string(),
             },
+            TestType {
+                input: "true;".to_string(),
+                expected: "true".to_string(),
+            },
+            TestType {
+                input: "false;".to_string(),
+                expected: "false".to_string(),
+            },
+            TestType {
+                input: "3 > 5 == false;".to_string(),
+                expected: "((3 > 5) == false)".to_string(),
+            },
+            TestType {
+                input: "3 < 5 == true;".to_string(),
+                expected: "((3 < 5) == true)".to_string(),
+            },
         ];
 
         for tt in &testcases {
@@ -780,6 +856,116 @@ mod tests {
             value.to_string(),
             i_lit.token.literal
         );
+        return true;
+    }
+
+    fn test_identifier(expression: ast::Expression, value: String) -> bool {
+        let ident = match expression {
+            ast::Expression::Ident(i) => Some(i),
+            _ => None,
+        };
+
+        let ident_unwrapped = ident.unwrap();
+        assert_eq!(
+            ident_unwrapped.value, value,
+            "ident.value is not={}, got={}",
+            value, ident_unwrapped.value
+        );
+        assert_eq!(
+            ident_unwrapped.token_literal(),
+            value,
+            "ident.token_literal is not={}, got={}",
+            value,
+            ident_unwrapped.token_literal()
+        );
+        return true;
+    }
+
+    fn test_boolean_literal(expression: ast::Expression, value: bool) -> bool {
+        let bool = match expression {
+            ast::Expression::Bool(b) => Some(b),
+            _ => None,
+        };
+        let bool_unwrapped = bool.unwrap();
+
+        assert_eq!(
+            bool_unwrapped.value, value,
+            "bool value not={}, got={}",
+            value, bool_unwrapped.value
+        );
+
+        assert_eq!(
+            bool_unwrapped.token_literal(),
+            value.to_string(),
+            "bool token literal not={}, got={}",
+            value.to_string(),
+            bool_unwrapped.token_literal()
+        );
+        return true;
+    }
+
+    fn test_literal_expression(expression: ast::Expression, expected: &TestLiteral) -> bool {
+        match expected {
+            TestLiteral::Int(value) => test_integer_literal(expression, *value),
+
+            TestLiteral::Bool(value) => test_boolean_literal(expression, *value),
+
+            TestLiteral::Ident(value) => test_identifier(expression, value.to_string()),
+        }
+    }
+
+    fn test_infix_expression(
+        expression: ast::Expression,
+        left: &TestLiteral,
+        operator: String,
+        right: &TestLiteral,
+    ) -> bool {
+        let expr = match expression {
+            ast::Expression::Infix(inf) => Some(inf),
+            _ => None,
+        };
+
+        let expr_unwrapped = expr.unwrap();
+
+        if !test_literal_expression(expr_unwrapped.left, left) {
+            return false;
+        }
+
+        assert_eq!(
+            expr_unwrapped.operator, operator,
+            "infix_expr.operator is not={}, got={}",
+            operator, expr_unwrapped.operator
+        );
+
+        if !test_literal_expression(expr_unwrapped.right, right) {
+            return false;
+        }
+
+        return true;
+    }
+
+    fn test_prefix_expression(
+        expression: ast::Expression,
+        operator: String,
+        right: &TestLiteral,
+    ) -> bool {
+        let expr = match expression {
+            ast::Expression::Prefix(pre) => Some(pre),
+            _ => None,
+        };
+
+        let expr_unwrapped = expr.unwrap();
+
+        assert_eq!(
+            expr_unwrapped.operator, operator,
+            "prefix_expr.operator is not={}, got={}",
+            operator, expr_unwrapped.operator
+        );
+
+        if !test_literal_expression(expr_unwrapped.right, right) {
+            return false;
+        }
+
         return true;
     }
 }
