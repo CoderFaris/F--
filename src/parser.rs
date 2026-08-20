@@ -2,7 +2,7 @@ use iota::iota;
 use std::{collections::HashMap, hash::Hash, sync::LazyLock};
 
 use crate::{
-    ast::{self, Node},
+    ast::{self, BlockStatement, Node},
     lexer::Lexer,
     token::{self, Token, TokenType},
 };
@@ -67,6 +67,9 @@ impl Parser {
         parser.register_prefix(TokenType::Minus, Parser::parse_prefix_expression);
         parser.register_prefix(TokenType::True, Parser::parse_boolean);
         parser.register_prefix(TokenType::False, Parser::parse_boolean);
+        parser.register_prefix(TokenType::LParen, Parser::parse_grouped_expression);
+        parser.register_prefix(TokenType::RParen, Parser::parse_grouped_expression);
+        parser.register_prefix(TokenType::If, Parser::parse_if_expression);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Asterisk, Parser::parse_infix_expression);
@@ -254,6 +257,75 @@ impl Parser {
             token: self.curr_token.clone(),
             value: self.curr_token_is(TokenType::True),
         }))
+    }
+
+    fn parse_grouped_expression(&mut self) -> Option<ast::Expression> {
+        self.next_token();
+
+        let expression = self.parse_expression(LOWEST);
+
+        if !self.expect_peek(TokenType::RParen) {
+            return None;
+        }
+
+        return expression;
+    }
+
+    fn parse_if_expression(&mut self) -> Option<ast::Expression> {
+        if !self.expect_peek(TokenType::LParen) {
+            return None;
+        }
+
+        self.next_token();
+
+        let condition = self.parse_expression(LOWEST);
+
+        if !self.expect_peek(TokenType::RParen) {
+            return None;
+        }
+
+        if !self.expect_peek(TokenType::LBrace) {
+            return None;
+        }
+
+        let consequence = self.parse_block_statement();
+
+        let mut alt: Option<BlockStatement> = None;
+
+        if self.peek_token_is(TokenType::Else) {
+            self.next_token();
+
+            if !self.expect_peek(TokenType::LBrace) {
+                return None;
+            }
+
+            alt = Some(self.parse_block_statement());
+        }
+
+        Some(ast::Expression::If(Box::new(ast::IfExpression {
+            token: self.curr_token.clone(),
+            condition: condition?,
+            consequence: consequence,
+            alternative: if alt.is_some() { alt } else { None },
+        })))
+    }
+
+    fn parse_block_statement(&mut self) -> ast::BlockStatement {
+        let mut statements = Vec::new();
+
+        self.next_token();
+        while !self.curr_token_is(TokenType::RBrace) && !self.curr_token_is(TokenType::Eof) {
+            let stmt = self.parse_statement();
+            if stmt.is_some() {
+                statements.push(stmt.unwrap());
+            }
+            self.next_token();
+        }
+
+        ast::BlockStatement {
+            token: self.curr_token.clone(),
+            statements: statements,
+        }
     }
 
     fn curr_token_is(&self, token: TokenType) -> bool {
@@ -791,6 +863,26 @@ mod tests {
                 expected: "(((a + (b * c)) + (d / e)) - f)".to_string(),
             },
             TestType {
+                input: "1 + (2 + 3) + 4;".to_string(),
+                expected: "((1 + (2 + 3)) + 4)".to_string(),
+            },
+            TestType {
+                input: "(5 + 5) * 2;".to_string(),
+                expected: "((5 + 5) * 2)".to_string(),
+            },
+            TestType {
+                input: "2 / (5 + 5);".to_string(),
+                expected: "(2 / (5 + 5))".to_string(),
+            },
+            TestType {
+                input: "-(5 + 5);".to_string(),
+                expected: "(-(5 + 5))".to_string(),
+            },
+            TestType {
+                input: "!(true == true);".to_string(),
+                expected: "(!(true == true))".to_string(),
+            },
+            TestType {
                 input: "true;".to_string(),
                 expected: "true".to_string(),
             },
@@ -820,6 +912,135 @@ mod tests {
                 "expected={}, got={}",
                 tt.expected, actual
             );
+        }
+    }
+    #[test]
+    fn test_if_expression() {
+        let input = "if (x < y) { x; };";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expr: Option<_> = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let ifexpr: Option<_> = match &expr.unwrap().expression {
+            ast::Expression::If(ifexpr) => Some(ifexpr),
+            _ => None,
+        };
+
+        let if_expression = ifexpr.unwrap();
+
+        if !test_infix_expression(
+            if_expression.condition.clone(),
+            &TestLiteral::Ident("x".to_string()),
+            "<".to_string(),
+            &TestLiteral::Ident("y".to_string()),
+        ) {
+            return;
+        };
+
+        assert_eq!(
+            if_expression.consequence.statements.len(),
+            1,
+            "consequence has more than 1 statement, got={}",
+            if_expression.consequence.statements.len()
+        );
+
+        let con = match &if_expression.consequence.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let consequence = con.unwrap();
+
+        if !test_identifier(consequence.expression.clone(), "x".to_string()) {
+            return;
+        }
+
+        if if_expression.alternative.is_some() {
+            panic!(
+                "if_expression.alternative.statements was not nil, got {:#?}",
+                if_expression.alternative
+            );
+        }
+    }
+
+    #[test]
+    fn test_if_else_expression() {
+        let input = "if (x < y) { x; } else { y; };";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expr: Option<_> = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let ifexpr: Option<_> = match &expr.unwrap().expression {
+            ast::Expression::If(ifexpr) => Some(ifexpr),
+            _ => None,
+        };
+
+        let if_expression = ifexpr.unwrap();
+
+        if !test_infix_expression(
+            if_expression.condition.clone(),
+            &TestLiteral::Ident("x".to_string()),
+            "<".to_string(),
+            &TestLiteral::Ident("y".to_string()),
+        ) {
+            return;
+        };
+
+        assert_eq!(
+            if_expression.consequence.statements.len(),
+            1,
+            "consequence has more than 1 statement, got={}",
+            if_expression.consequence.statements.len()
+        );
+
+        let con = match &if_expression.consequence.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let consequence = con.unwrap();
+
+        if !test_identifier(consequence.expression.clone(), "x".to_string()) {
+            return;
+        }
+
+        if if_expression.alternative.is_some() {
+            let alternative = if_expression.alternative.clone().unwrap();
+            let expr = match &alternative.statements[0] {
+                ast::Statement::Expression(expr) => Some(expr),
+                _ => None,
+            };
+            let expr_stmt = expr.unwrap();
+
+            if !test_identifier(expr_stmt.expression.clone(), "y".to_string()) {
+                return;
+            }
         }
     }
 
