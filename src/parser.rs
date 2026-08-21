@@ -70,6 +70,7 @@ impl Parser {
         parser.register_prefix(TokenType::LParen, Parser::parse_grouped_expression);
         parser.register_prefix(TokenType::RParen, Parser::parse_grouped_expression);
         parser.register_prefix(TokenType::If, Parser::parse_if_expression);
+        parser.register_prefix(TokenType::Function, Parser::parse_function_literal);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Asterisk, Parser::parse_infix_expression);
@@ -326,6 +327,61 @@ impl Parser {
             token: self.curr_token.clone(),
             statements: statements,
         }
+    }
+
+    fn parse_function_literal(&mut self) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+
+        if !self.expect_peek(TokenType::LParen) {
+            return None;
+        }
+
+        let params = self.parse_function_parameters();
+
+        if !self.expect_peek(TokenType::LBrace) {
+            return None;
+        }
+
+        let body = self.parse_block_statement();
+
+        Some(ast::Expression::Function(ast::FunctionLiteral {
+            token: token,
+            parameters: params.unwrap(),
+            body: body,
+        }))
+    }
+
+    fn parse_function_parameters(&mut self) -> Option<Vec<ast::Identifier>> {
+        let mut identifiers = Vec::new();
+
+        if self.peek_token_is(TokenType::RParen) {
+            self.next_token();
+            return Some(identifiers);
+        }
+
+        self.next_token();
+
+        identifiers.push(ast::Identifier {
+            token: self.curr_token.clone(),
+            value: self.curr_token.literal.clone(),
+        });
+
+        while self.peek_token_is(TokenType::Comma) {
+            self.next_token();
+            self.next_token();
+            identifiers.push(ast::Identifier {
+                token: self.curr_token.clone(),
+                value: self.curr_token.literal.clone(),
+            });
+        }
+
+        if !self.expect_peek(TokenType::RParen) {
+            self.errors
+                .push("function parameter error: forgot ')'".to_string());
+            return None;
+        }
+
+        Some(identifiers)
     }
 
     fn curr_token_is(&self, token: TokenType) -> bool {
@@ -1040,6 +1096,133 @@ mod tests {
 
             if !test_identifier(expr_stmt.expression.clone(), "y".to_string()) {
                 return;
+            }
+        }
+    }
+
+    #[test]
+    fn test_function_literal_parsing() {
+        let input = "fn(x, y) { x + y; };";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expr = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let expr_unwrapped = expr.unwrap();
+
+        let function_lit = match &expr_unwrapped.expression {
+            ast::Expression::Function(fun) => Some(fun),
+            _ => None,
+        };
+
+        let function_literal = function_lit.unwrap();
+
+        assert_eq!(
+            function_literal.parameters.len(),
+            2,
+            "function_literal.parameters mismatch, got={}",
+            function_literal.parameters.len()
+        );
+
+        test_literal_expression(
+            ast::Expression::Ident(function_literal.parameters[0].clone()),
+            &TestLiteral::Ident("x".to_string()),
+        );
+
+        test_literal_expression(
+            ast::Expression::Ident(function_literal.parameters[1].clone()),
+            &TestLiteral::Ident("y".to_string()),
+        );
+
+        assert_eq!(
+            function_literal.body.statements.len(),
+            1,
+            "function_literal.body.statements length mismatch, got={}",
+            function_literal.body.statements.len()
+        );
+
+        let func_body = match &function_literal.body.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let function_body = func_body.unwrap();
+
+        test_infix_expression(
+            function_body.expression.clone(),
+            &TestLiteral::Ident("x".to_string()),
+            "+".to_string(),
+            &TestLiteral::Ident("y".to_string()),
+        );
+    }
+
+    #[test]
+    fn test_function_parameters() {
+        struct TestType {
+            input: String,
+            expected_params: Vec<String>,
+        }
+
+        let testcases = [
+            TestType {
+                input: "fn () {};".to_string(),
+                expected_params: vec![],
+            },
+            TestType {
+                input: "fn(x) {};".to_string(),
+                expected_params: vec!["x".to_string()],
+            },
+            TestType {
+                input: "fn(x, y, z) {};".to_string(),
+                expected_params: vec!["x".to_string(), "y".to_string(), "z".to_string()],
+            },
+        ];
+
+        for tt in &testcases {
+            let l = Lexer::new(&tt.input);
+            let mut p = Parser::new(l);
+            let program = p.parse();
+            check_parser_errors(&p);
+
+            let stmt = match &program.statements[0] {
+                ast::Statement::Expression(expr) => Some(expr),
+                _ => None,
+            };
+
+            let stmt_unwrapped = stmt.unwrap();
+
+            let fun_lit = match &stmt_unwrapped.expression {
+                ast::Expression::Function(fun) => Some(fun),
+                _ => None,
+            };
+
+            let function_literal = fun_lit.unwrap();
+
+            assert_eq!(
+                function_literal.parameters.len(),
+                tt.expected_params.len(),
+                "parameter length wrong, want={}, got={}",
+                tt.expected_params.len(),
+                function_literal.parameters.len()
+            );
+
+            for (idx, ident) in tt.expected_params.iter().enumerate() {
+                test_literal_expression(
+                    ast::Expression::Ident(function_literal.parameters[idx].clone()),
+                    &TestLiteral::Ident(ident.to_string()),
+                );
             }
         }
     }

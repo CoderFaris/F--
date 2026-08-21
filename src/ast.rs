@@ -1,5 +1,6 @@
 use crate::token::Token;
 use std::any::Any;
+use std::borrow::Borrow;
 
 #[derive(Clone, Debug)]
 pub struct LetStatement {
@@ -24,6 +25,13 @@ pub struct ExpressionStatement {
 pub struct BlockStatement {
     pub token: Token,
     pub statements: Vec<Statement>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FunctionLiteral {
+    pub token: Token,
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
 }
 
 #[derive(Clone, Debug)]
@@ -217,6 +225,34 @@ impl Node for Boolean {
     }
 }
 
+impl Node for FunctionLiteral {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        let mut s = String::new();
+        let mut params = Vec::new();
+
+        for param in &self.parameters {
+            params.push(param);
+        }
+        let body = &self
+            .body
+            .statements
+            .iter()
+            .map(|statement| statement.string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        s += &self.token_literal();
+        s += " (";
+        s += body;
+        s += ") ";
+        s += &self.body.string();
+        s
+    }
+}
+
 impl Node for Statement {
     fn token_literal(&self) -> String {
         match self {
@@ -246,6 +282,7 @@ impl Node for Expression {
             Expression::Prefix(pre) => pre.token_literal(),
             Expression::Infix(inf) => inf.token_literal(),
             Expression::If(ifexp) => ifexp.token_literal(),
+            Expression::Function(fun) => fun.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -258,6 +295,7 @@ impl Node for Expression {
             Expression::Prefix(pre) => pre.string(),
             Expression::Infix(inf) => inf.string(),
             Expression::If(ifexp) => ifexp.string(),
+            Expression::Function(fun) => fun.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -297,6 +335,7 @@ pub enum Expression {
     Prefix(Box<PrefixExpression>),
     Infix(Box<InfixExpression>),
     If(Box<IfExpression>),
+    Function(FunctionLiteral),
     Placeholder, // delete this when starting to add expressions
 }
 
