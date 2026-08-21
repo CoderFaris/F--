@@ -58,6 +58,13 @@ pub struct IfExpression {
 }
 
 #[derive(Clone, Debug)]
+pub struct CallExpression {
+    pub token: Token,
+    pub function: Expression,
+    pub arguments: Vec<Expression>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Identifier {
     pub token: Token,
     pub value: String,
@@ -196,6 +203,26 @@ impl Node for IfExpression {
     }
 }
 
+impl Node for CallExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        let mut s = String::new();
+        let mut arguments = Vec::new();
+        for arg in &self.arguments {
+            arguments.push(arg.string());
+        }
+
+        s += &self.function.string();
+        s += "(";
+        s += &arguments.join(", ");
+        s += ")";
+        s
+    }
+}
+
 impl Node for Identifier {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
@@ -283,6 +310,7 @@ impl Node for Expression {
             Expression::Infix(inf) => inf.token_literal(),
             Expression::If(ifexp) => ifexp.token_literal(),
             Expression::Function(fun) => fun.token_literal(),
+            Expression::Call(c) => c.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -296,6 +324,7 @@ impl Node for Expression {
             Expression::Infix(inf) => inf.string(),
             Expression::If(ifexp) => ifexp.string(),
             Expression::Function(fun) => fun.string(),
+            Expression::Call(c) => c.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -336,6 +365,7 @@ pub enum Expression {
     Infix(Box<InfixExpression>),
     If(Box<IfExpression>),
     Function(FunctionLiteral),
+    Call(Box<CallExpression>),
     Placeholder, // delete this when starting to add expressions
 }
 

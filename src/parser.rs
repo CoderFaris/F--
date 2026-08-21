@@ -17,7 +17,7 @@ static PRECEDENDES: LazyLock<HashMap<TokenType, isize>> = LazyLock::new(|| {
     precedences.insert(TokenType::Minus, SUM);
     precedences.insert(TokenType::Asterisk, PRODUCT);
     precedences.insert(TokenType::Slash, PRODUCT);
-
+    precedences.insert(TokenType::LParen, CALL);
     precedences
 });
 
@@ -71,6 +71,7 @@ impl Parser {
         parser.register_prefix(TokenType::RParen, Parser::parse_grouped_expression);
         parser.register_prefix(TokenType::If, Parser::parse_if_expression);
         parser.register_prefix(TokenType::Function, Parser::parse_function_literal);
+        parser.register_infix(TokenType::LParen, Parser::parse_call_expression);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Asterisk, Parser::parse_infix_expression);
@@ -229,6 +230,42 @@ impl Parser {
         }
 
         left_exp
+    }
+
+    fn parse_call_expression(&mut self, function: ast::Expression) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+        let arguments = self.parse_call_arguments();
+        Some(ast::Expression::Call(Box::new(ast::CallExpression {
+            token: token,
+            function: function,
+            arguments: arguments?,
+        })))
+    }
+
+    fn parse_call_arguments(&mut self) -> Option<Vec<ast::Expression>> {
+        let mut args = Vec::new();
+        if self.peek_token_is(TokenType::RParen) {
+            self.next_token();
+            return Some(args);
+        }
+
+        self.next_token();
+
+        args.push(self.parse_expression(LOWEST).unwrap());
+
+        while self.peek_token_is(TokenType::Comma) {
+            self.next_token();
+            self.next_token();
+            args.push(self.parse_expression(LOWEST).unwrap());
+        }
+
+        if !self.expect_peek(TokenType::RParen) {
+            self.errors
+                .push("call parameter error: forgot ')'".to_string());
+            return None;
+        }
+
+        Some(args)
     }
 
     fn parse_identifier(&mut self) -> Option<ast::Expression> {
@@ -954,6 +991,18 @@ mod tests {
                 input: "3 < 5 == true;".to_string(),
                 expected: "((3 < 5) == true)".to_string(),
             },
+            TestType {
+                input: "a + add(b * c) + d;".to_string(),
+                expected: "((a + add((b * c))) + d)".to_string(),
+            },
+            TestType {
+                input: "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8));".to_string(),
+                expected: "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))".to_string(),
+            },
+            TestType {
+                input: "add(a + b + c * d / f + g);".to_string(),
+                expected: "add((((a + b) + ((c * d) / f)) + g))".to_string(),
+            },
         ];
 
         for tt in &testcases {
@@ -1224,6 +1273,106 @@ mod tests {
                     &TestLiteral::Ident(ident.to_string()),
                 );
             }
+        }
+    }
+
+    #[test]
+    fn test_call_expression_parsing() {
+        let input = "add(1, 2 * 3, 4 + 5);";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        let stmt = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let stmt_unwrapped = stmt.unwrap();
+
+        let call_expr = match &stmt_unwrapped.expression {
+            ast::Expression::Call(c) => Some(c),
+            _ => None,
+        };
+
+        let call_expression = call_expr.unwrap();
+
+        if !test_identifier(call_expression.function.clone(), "add".to_string()) {
+            return;
+        }
+
+        assert_eq!(
+            call_expression.arguments.len(),
+            3,
+            "call_expression.arguments length wrong, got={}",
+            call_expression.arguments.len()
+        );
+
+        test_literal_expression(call_expression.arguments[0].clone(), &TestLiteral::Int(1));
+        test_infix_expression(
+            call_expression.arguments[1].clone(),
+            &TestLiteral::Int(2),
+            "*".to_string(),
+            &TestLiteral::Int(3),
+        );
+        test_infix_expression(
+            call_expression.arguments[2].clone(),
+            &TestLiteral::Int(4),
+            "+".to_string(),
+            &TestLiteral::Int(5),
+        );
+    }
+
+    #[test]
+    fn test_call_expression_parameters() {
+        struct TestType {
+            input: String,
+            expected_params_len: usize,
+        }
+
+        let testcases = [
+            TestType {
+                input: "add();".to_string(),
+                expected_params_len: 0,
+            },
+            TestType {
+                input: "add(1);".to_string(),
+                expected_params_len: 1,
+            },
+            TestType {
+                input: "add(1, 2 * 2);".to_string(),
+                expected_params_len: 2,
+            },
+        ];
+
+        for tt in &testcases {
+            let l = Lexer::new(&tt.input);
+            let mut p = Parser::new(l);
+            let program = p.parse();
+            check_parser_errors(&p);
+
+            let stmt = match &program.statements[0] {
+                ast::Statement::Expression(expr) => Some(expr),
+                _ => None,
+            };
+
+            let stmt_unwrapped = stmt.unwrap();
+
+            let call_expr = match &stmt_unwrapped.expression {
+                ast::Expression::Call(c) => Some(c),
+                _ => None,
+            };
+
+            let call_expression = call_expr.unwrap();
+
+            assert_eq!(
+                call_expression.arguments.len(),
+                tt.expected_params_len,
+                "call_expression.arguments len wrong, want={} got={}",
+                tt.expected_params_len,
+                call_expression.arguments.len()
+            );
         }
     }
 
