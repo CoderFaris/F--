@@ -44,7 +44,7 @@ iota!(
 );
 
 impl Parser {
-    fn new(lxr: Lexer) -> Parser {
+    pub fn new(lxr: Lexer) -> Parser {
         let mut parser = Parser {
             lexer: lxr,
             curr_token: Token {
@@ -92,7 +92,7 @@ impl Parser {
         self.peek_token = self.lexer.next_token();
     }
 
-    fn parse(&mut self) -> ast::Program {
+    pub fn parse(&mut self) -> ast::Program {
         let mut program = ast::Program {
             statements: Vec::new(),
         };
@@ -141,8 +141,8 @@ impl Parser {
 
         let value = self.parse_expression(LOWEST);
 
-        if !self.expect_peek(TokenType::Semicolon) {
-            return None;
+        if self.peek_token_is(TokenType::Semicolon) {
+            self.next_token();
         }
 
         Some(ast::LetStatement {
@@ -159,8 +159,8 @@ impl Parser {
 
         let return_value = self.parse_expression(LOWEST);
 
-        if !self.expect_peek(TokenType::Semicolon) {
-            return None;
+        if self.peek_token_is(TokenType::Semicolon) {
+            self.next_token();
         }
 
         Some(ast::ReturnStatement {
@@ -174,8 +174,12 @@ impl Parser {
         let expression = self.parse_expression(LOWEST);
 
         // semicolon required
-        if !self.expect_peek(TokenType::Semicolon) {
-            return None;
+        // if !self.expect_peek(TokenType::Semicolon) {
+        //     return None;
+        // }
+
+        if self.peek_token_is(TokenType::Semicolon) {
+            self.next_token();
         }
 
         Some(ast::ExpressionStatement {
@@ -455,7 +459,7 @@ impl Parser {
         self.errors.push(error_message);
     }
 
-    fn errors(&self) -> Vec<String> {
+    pub fn errors(&self) -> Vec<String> {
         self.errors.clone()
     }
 

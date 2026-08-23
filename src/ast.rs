@@ -118,7 +118,7 @@ impl Node for ReturnStatement {
 
         s.push_str(&stmt_str[..]);
         s.push_str(&self.return_value.string());
-        s.push_str("; \n");
+        s.push_str("; ");
         s
     }
 }
@@ -260,20 +260,16 @@ impl Node for FunctionLiteral {
         let mut params = Vec::new();
 
         for param in &self.parameters {
-            params.push(param);
+            params.push(param.string());
         }
-        let body = &self
-            .body
-            .statements
-            .iter()
-            .map(|statement| statement.string())
-            .collect::<Vec<_>>()
-            .join(", ");
+
         s += &self.token_literal();
         s += " (";
-        s += body;
+        s += &params.join(", ");
         s += ") ";
+        s += "{ ";
         s += &self.body.string();
+        s += "}";
         s
     }
 }

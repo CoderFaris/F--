@@ -1,12 +1,16 @@
+use colored::Colorize;
+use compiler::ast::Node;
 use compiler::lexer::Lexer;
+use compiler::parser::Parser;
 use compiler::token::TokenType;
 use std::env;
 use std::fs::File;
 use std::io::Read;
 
-fn driver() -> () {
+fn read_from_file() -> () {
     let args: Vec<_> = env::args().skip(1).collect();
     let show_tokens = args.contains(&String::from("--tokens"));
+    let show_ast = args.contains(&String::from("--ast"));
     let text = match args.first() {
         Some(path) => {
             let mut file = File::open(path).expect("File not found");
@@ -28,11 +32,32 @@ fn driver() -> () {
             tok = l.next_token();
         }
         println!("{}", tok); // printing the EOF
-    } else {
-        println!("No flag meaning compilation, although it's nothing for now");
+        return;
+    }
+
+    if show_ast {
+        let l = Lexer::new(&text.to_string());
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        if p.errors().len() > 0 {
+            print_parser_errors(&p.errors());
+            return;
+        }
+
+        println!("{} \n", program.string());
+        return;
+    }
+
+    println!("No flag meaning compilation, although it's nothing for now");
+}
+
+fn print_parser_errors(errors: &Vec<String>) {
+    println!("{}", "Parsing errors".red());
+    for err in errors {
+        eprintln!("\t {} \n", err);
     }
 }
 
 fn main() {
-    driver();
+    read_from_file();
 }
