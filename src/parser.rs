@@ -137,28 +137,35 @@ impl Parser {
             return None;
         }
 
-        // skipping the expression for now until we encounter a semicolon
-        while !self.curr_token_is(TokenType::Semicolon) {
-            self.next_token();
+        self.next_token();
+
+        let value = self.parse_expression(LOWEST);
+
+        if !self.expect_peek(TokenType::Semicolon) {
+            return None;
         }
 
         Some(ast::LetStatement {
             token: token,
             name: name,
-            value: ast::Expression::Placeholder,
+            value: value.unwrap(),
         })
     }
 
     fn parse_return_statement(&mut self) -> Option<ast::ReturnStatement> {
         let token = self.curr_token.clone();
 
-        while !self.curr_token_is(TokenType::Semicolon) {
-            self.next_token();
+        self.next_token();
+
+        let return_value = self.parse_expression(LOWEST);
+
+        if !self.expect_peek(TokenType::Semicolon) {
+            return None;
         }
 
         Some(ast::ReturnStatement {
             token: token,
-            return_value: ast::Expression::Placeholder,
+            return_value: return_value.unwrap(),
         })
     }
 
@@ -497,44 +504,54 @@ mod tests {
 
     #[test]
     fn test_let_statements() {
-        let input = "
-        let x = 5;
-        let y = 10;
-        let foobar = 838383;
-        ";
-
-        let lexer = Lexer::new(input);
-        let mut parser: Parser = Parser::new(lexer);
-
-        let program = parser.parse();
-
-        check_parser_errors(&parser);
-
-        assert_eq!(
-            program.statements.len(),
-            3,
-            "program.statements does not have 3 statements; statements={}",
-            program.statements.len()
-        );
-
         struct TestType {
-            expected_identifier: &'static str,
+            input: &'static str,
+            expected_ident: &'static str,
+            expected_value: TestLiteral,
         }
 
-        let tests = [
+        let testcases = [
             TestType {
-                expected_identifier: "x",
+                input: "let x = 5;",
+                expected_ident: "x",
+                expected_value: TestLiteral::Int(5),
             },
             TestType {
-                expected_identifier: "y",
+                input: "let y = true;",
+                expected_ident: "y",
+                expected_value: TestLiteral::Bool(true),
             },
             TestType {
-                expected_identifier: "foobar",
+                input: "let foobar = y;",
+                expected_ident: "foobar",
+                expected_value: TestLiteral::Ident("y".to_string()),
             },
         ];
 
-        for (i, tt) in tests.iter().enumerate() {
-            if !test_let_statement(&program.statements[i], tt.expected_identifier) {
+        for tt in &testcases {
+            let l = Lexer::new(tt.input);
+            let mut p = Parser::new(l);
+            let program = p.parse();
+            check_parser_errors(&p);
+
+            assert_eq!(
+                program.statements.len(),
+                1,
+                "program.statements does not have 1 statement; statements={}",
+                program.statements.len()
+            );
+
+            if !test_let_statement(&program.statements[0], &tt.expected_ident) {
+                return;
+            }
+
+            let let_stmt_val: Option<_> = match &program.statements[0] {
+                ast::Statement::Let(l) => Some(l.value.clone()),
+                _ => None,
+            };
+
+            let let_statement_value = let_stmt_val.unwrap();
+            if !test_literal_expression(let_statement_value, &tt.expected_value) {
                 return;
             }
         }

@@ -1,6 +1,5 @@
 use crate::token::Token;
 use std::any::Any;
-use std::borrow::Borrow;
 
 #[derive(Clone, Debug)]
 pub struct LetStatement {
@@ -100,7 +99,7 @@ impl Node for LetStatement {
         let stmt_str = self.token_literal() + " " + &self.name.value + " = ";
         s.push_str(&stmt_str[..]);
 
-        // TODO: check value whether it's Some or None
+        s.push_str(&self.value.string());
 
         s.push_str("; \n");
 
@@ -117,9 +116,8 @@ impl Node for ReturnStatement {
         let mut s = String::new();
         let stmt_str = self.token_literal() + " ";
 
-        // TODO: check return value whether it's Some or None
-
         s.push_str(&stmt_str[..]);
+        s.push_str(&self.return_value.string());
         s.push_str("; \n");
         s
     }
@@ -400,7 +398,7 @@ mod tests {
 
         assert_eq!(
             program.string(),
-            "let my_var = another_var",
+            "let my_var = another_var; \n",
             "wrong string, got={}",
             program.string()
         );
