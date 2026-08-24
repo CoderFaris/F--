@@ -31,8 +31,8 @@ impl Lexer {
     }
 
     pub fn next_token(&mut self) -> Token {
-        // we don't care about whitespace
-        self.consume_whitespace();
+        // we don't care about whitespace/comments
+        self.consume_whitespace_and_comments();
 
         let tok = match self.ch {
             b'=' => {
@@ -141,9 +141,19 @@ impl Lexer {
         }
     }
 
-    fn consume_whitespace(&mut self) {
-        while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
-            self.read_char();
+    fn consume_whitespace_and_comments(&mut self) {
+        loop {
+            while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
+                self.read_char();
+            }
+
+            if self.ch == b'/' && self.peek_char() == b'/' {
+                while self.ch != b'\n' && self.ch != 0 {
+                    self.read_char();
+                }
+                continue;
+            }
+            break;
         }
     }
 }

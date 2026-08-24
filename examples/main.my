@@ -1,6 +1,9 @@
-let five = 5;
+// this is a comment
+let five = 5; // this is a variable
 let ten = 10;
+
 let add = fn(x, y) {
     return x + y;
 }
 let result = add(five, ten);
+// this is also a comment
