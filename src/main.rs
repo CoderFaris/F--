@@ -1,8 +1,10 @@
 use colored::Colorize;
 use compiler::ast::Node;
+use compiler::codegen::Compiler;
 use compiler::lexer::Lexer;
 use compiler::parser::Parser;
 use compiler::token::TokenType;
+use inkwell::context::Context;
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -11,6 +13,7 @@ fn read_from_file() -> () {
     let args: Vec<_> = env::args().skip(1).collect();
     let show_tokens = args.contains(&String::from("--tokens"));
     let show_ast = args.contains(&String::from("--ast"));
+    let show_ir = args.contains(&String::from("--ir"));
     let text = match args.first() {
         Some(path) => {
             let mut file = File::open(path).expect("File not found");
@@ -23,8 +26,8 @@ fn read_from_file() -> () {
             panic!("Expected the path to the file as the first argument");
         }
     };
+    let mut l = Lexer::new(&text.to_string());
     if show_tokens {
-        let mut l = Lexer::new(&text.to_string());
         // go through the tokens in the lexer
         let mut tok = l.next_token();
         while tok.token_type != TokenType::Eof {
@@ -34,17 +37,21 @@ fn read_from_file() -> () {
         println!("{}", tok); // printing the EOF
         return;
     }
-
+    let mut p = Parser::new(l);
+    let program = p.parse();
     if show_ast {
-        let l = Lexer::new(&text.to_string());
-        let mut p = Parser::new(l);
-        let program = p.parse();
         if p.errors().len() > 0 {
             print_parser_errors(&p.errors());
             return;
         }
 
         println!("{} \n", program.string());
+        return;
+    }
+    let context = Context::create();
+    let compiler = Compiler::new(&context);
+    if show_ir {
+        println!("{}", compiler.module.print_to_string().to_string());
         return;
     }
 

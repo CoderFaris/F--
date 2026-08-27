@@ -12,8 +12,15 @@ pub struct Compiler<'ctx> {
 }
 
 impl<'ctx> Compiler<'ctx> {
-    pub fn new(&mut self) -> Compiler {
-        todo!("next thing we are doing is this")
+    pub fn new(context: &'ctx Context) -> Compiler<'ctx> {
+        let builder = context.create_builder();
+        let module = context.create_module("my compiler");
+        Compiler {
+            context: context,
+            builder: builder,
+            module: module,
+            named_values: HashMap::new(),
+        }
     }
     pub fn compile_program(&mut self, program: ast::Program) -> Result<(), &'static str> {
         for statement in program.statements {
