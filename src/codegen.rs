@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 
-use inkwell::{builder::Builder, context::Context, module::Module, values::BasicValueEnum};
+use inkwell::{
+    builder::Builder,
+    context::Context,
+    module::Module,
+    values::{BasicValueEnum, IntValue, PointerValue},
+};
 
 use crate::ast;
 
@@ -8,7 +13,7 @@ pub struct Compiler<'ctx> {
     pub context: &'ctx Context,
     pub builder: Builder<'ctx>,
     pub module: Module<'ctx>,
-    pub named_values: HashMap<String, BasicValueEnum<'ctx>>,
+    pub named_values: HashMap<String, PointerValue<'ctx>>,
 }
 
 impl<'ctx> Compiler<'ctx> {
@@ -23,6 +28,15 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
     pub fn compile_program(&mut self, program: ast::Program) -> Result<(), &'static str> {
+        let i64_type = self.context.i64_type();
+        let fn_type = i64_type.fn_type(&[], false);
+
+        let function = self.module.add_function("main", fn_type, None);
+
+        let entry = self.context.append_basic_block(function, "entry");
+
+        self.builder.position_at_end(entry);
+
         for statement in program.statements {
             self.compile_stmt(statement);
         }
@@ -32,7 +46,15 @@ impl<'ctx> Compiler<'ctx> {
         match statement {
             ast::Statement::Let(l) => {
                 let value = self.compile_expr(l.value)?;
-                self.named_values.insert(l.name.value, value);
+                let name = l.name.value;
+                let allocation = self
+                    .builder
+                    .build_alloca(value.get_type(), &name)
+                    .map_err(|_| "Failed to allocate variable")?;
+                self.named_values.insert(name.clone(), allocation);
+                self.builder
+                    .build_store(allocation, value)
+                    .map_err(|_| "Failed to store variable")?;
                 Ok(())
             }
             ast::Statement::Return(r) => {
@@ -108,11 +130,16 @@ impl<'ctx> Compiler<'ctx> {
                 }
             }
 
-            ast::Expression::Ident(ident) => self
-                .named_values
-                .get(&ident.value)
-                .cloned()
-                .ok_or("Unknown variable"),
+            ast::Expression::Ident(ident) => {
+                let ptr = self
+                    .named_values
+                    .get(&ident.value)
+                    .cloned()
+                    .ok_or("Unknown variable")?;
+                self.builder
+                    .build_load(self.context.i64_type(), ptr, "loadtmp")
+                    .map_err(|_| "Failed to load variable")
+            }
             _ => todo!("handle rest of expression types"),
         }
     }

@@ -49,7 +49,14 @@ fn read_from_file() -> () {
         return;
     }
     let context = Context::create();
-    let compiler = Compiler::new(&context);
+    let mut compiler = Compiler::new(&context);
+
+    let result = compiler.compile_program(program);
+    match result {
+        Ok(_) => {}
+        Err(e) => println!("{}", e),
+    };
+
     if show_ir {
         println!("{}", compiler.module.print_to_string().to_string());
         return;
