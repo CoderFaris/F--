@@ -4,7 +4,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
-    values::{BasicValueEnum, IntValue, PointerValue},
+    values::{BasicValueEnum, PointerValue},
 };
 
 use crate::ast;
@@ -125,6 +125,18 @@ impl<'ctx> Compiler<'ctx> {
                         .build_int_compare(inkwell::IntPredicate::NE, l, r, "necmp")
                         .map(BasicValueEnum::IntValue)
                         .map_err(|_| "Failed to build necmp")
+                } else {
+                    Err("Invalid operator")
+                }
+            }
+            ast::Expression::Prefix(pre) => {
+                // function not finished
+                let r = self.compile_expr(pre.right)?.into_int_value();
+                if pre.operator == "-".to_string() {
+                    self.builder
+                        .build_int_neg(r, "int_neg")
+                        .map(BasicValueEnum::IntValue)
+                        .map_err(|_| "Failed to build int_neg")
                 } else {
                     Err("Invalid operator")
                 }
