@@ -1,4 +1,4 @@
-use crate::token::Token;
+use crate::{token::Token, types::Type};
 use std::any::Any;
 
 #[derive(Clone, Debug)]
@@ -67,6 +67,7 @@ pub struct CallExpression {
 pub struct Identifier {
     pub token: Token,
     pub value: String,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
@@ -381,6 +382,7 @@ mod tests {
                         literal: "my_var".to_string(),
                     },
                     value: "my_var".to_string(),
+                    ty: Type::Unknown,
                 },
                 value: Expression::Ident(Identifier {
                     token: Token {
@@ -388,6 +390,7 @@ mod tests {
                         literal: "another_var".to_string(),
                     },
                     value: "another_var".to_string(),
+                    ty: Type::Unknown,
                 }),
             })],
         };

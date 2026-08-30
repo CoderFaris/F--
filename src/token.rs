@@ -28,9 +28,13 @@ pub enum TokenType {
     LBrace,
     RBrace,
     Function,
+    FunctionTy,
+    Colon,
     Let,
     True,
     False,
+    Integer,
+    Boolean,
     If,
     Else,
     Return,
@@ -48,7 +52,7 @@ impl Display for Token {
     }
 }
 
-// code runs lazily on the first access, only declared here but not allocated or populated yet
+// code runs lazily on the first access, only declared here but not allocated or populated yet (until we enter the function)
 static KEYWORDS: LazyLock<HashMap<String, TokenType>> = LazyLock::new(|| {
     let mut keywords: HashMap<String, TokenType> = HashMap::new();
     keywords.insert(String::from("fn"), TokenType::Function);
@@ -58,6 +62,8 @@ static KEYWORDS: LazyLock<HashMap<String, TokenType>> = LazyLock::new(|| {
     keywords.insert(String::from("return"), TokenType::Return);
     keywords.insert(String::from("true"), TokenType::True);
     keywords.insert(String::from("false"), TokenType::False);
+    keywords.insert(String::from("int"), TokenType::Integer);
+    keywords.insert(String::from("bool"), TokenType::Boolean);
     keywords
 });
 

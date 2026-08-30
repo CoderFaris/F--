@@ -1,4 +1,6 @@
-enum Type {
+#[derive(Clone, Debug)]
+pub enum Type {
     Int,
     Bool,
+    Unknown,
 }

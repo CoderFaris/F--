@@ -5,6 +5,7 @@ use crate::{
     ast::{self, BlockStatement, Node},
     lexer::Lexer,
     token::{self, Token, TokenType},
+    types::Type,
 };
 
 static PRECEDENDES: LazyLock<HashMap<TokenType, isize>> = LazyLock::new(|| {
@@ -131,6 +132,7 @@ impl Parser {
         let name = ast::Identifier {
             token: self.curr_token.clone(),
             value: self.curr_token.literal.clone(),
+            ty: Type::Unknown,
         };
 
         if !self.expect_peek(TokenType::Assign) {
@@ -171,7 +173,7 @@ impl Parser {
 
     fn parse_expression_statement(&mut self) -> Option<ast::ExpressionStatement> {
         let token = self.curr_token.clone();
-        let expression = self.parse_expression(LOWEST);
+        let expression = self.parse_expression(LOWEST)?;
 
         // semicolon required
         // if !self.expect_peek(TokenType::Semicolon) {
@@ -184,7 +186,7 @@ impl Parser {
 
         Some(ast::ExpressionStatement {
             token: token,
-            expression: expression.unwrap(),
+            expression: expression,
         })
     }
 
@@ -283,6 +285,7 @@ impl Parser {
         return Some(ast::Expression::Ident(ast::Identifier {
             token: self.curr_token.clone(),
             value: self.curr_token.literal.clone(),
+            ty: Type::Unknown,
         }));
     }
 
@@ -384,7 +387,7 @@ impl Parser {
             return None;
         }
 
-        let params = self.parse_function_parameters();
+        let params = self.parse_function_parameters()?;
 
         if !self.expect_peek(TokenType::LBrace) {
             return None;
@@ -394,7 +397,7 @@ impl Parser {
 
         Some(ast::Expression::Function(ast::FunctionLiteral {
             token: token,
-            parameters: params.unwrap(),
+            parameters: params,
             body: body,
         }))
     }
@@ -409,18 +412,36 @@ impl Parser {
 
         self.next_token();
 
-        identifiers.push(ast::Identifier {
+        let mut identifier = ast::Identifier {
             token: self.curr_token.clone(),
             value: self.curr_token.literal.clone(),
-        });
+            ty: Type::Unknown,
+        };
+
+        if !self.expect_peek(TokenType::Colon) {
+            return None;
+        }
+
+        let ty = self.parse_type()?;
+
+        identifier.ty = ty;
+
+        identifiers.push(identifier);
 
         while self.peek_token_is(TokenType::Comma) {
             self.next_token();
             self.next_token();
-            identifiers.push(ast::Identifier {
+            let mut identifier = ast::Identifier {
                 token: self.curr_token.clone(),
                 value: self.curr_token.literal.clone(),
-            });
+                ty: Type::Unknown,
+            };
+            if !self.expect_peek(TokenType::Colon) {
+                return None;
+            }
+            let ty = self.parse_type()?;
+            identifier.ty = ty;
+            identifiers.push(identifier);
         }
 
         if !self.expect_peek(TokenType::RParen) {
@@ -430,6 +451,23 @@ impl Parser {
         }
 
         Some(identifiers)
+    }
+
+    fn parse_type(&mut self) -> Option<Type> {
+        match self.peek_token.token_type {
+            TokenType::Integer => {
+                self.next_token();
+                Some(Type::Int)
+            }
+            TokenType::Boolean => {
+                self.next_token();
+                Some(Type::Bool)
+            }
+            _ => {
+                self.errors.push("expected type".to_string());
+                None
+            }
+        }
     }
 
     fn curr_token_is(&self, token: TokenType) -> bool {
@@ -1172,7 +1210,7 @@ mod tests {
 
     #[test]
     fn test_function_literal_parsing() {
-        let input = "fn(x, y) { x + y; };";
+        let input = "fn(x: int, y: int) { x + y; };";
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         let program = p.parse();
@@ -1251,11 +1289,11 @@ mod tests {
                 expected_params: vec![],
             },
             TestType {
-                input: "fn(x) {};".to_string(),
+                input: "fn(x: int) {};".to_string(),
                 expected_params: vec!["x".to_string()],
             },
             TestType {
-                input: "fn(x, y, z) {};".to_string(),
+                input: "fn(x: int, y: int, z: int) {};".to_string(),
                 expected_params: vec!["x".to_string(), "y".to_string(), "z".to_string()],
             },
         ];

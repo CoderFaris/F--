@@ -54,7 +54,19 @@ impl Lexer {
             b'{' => new_token(TokenType::LBrace, self.ch),
             b'}' => new_token(TokenType::RBrace, self.ch),
             b'+' => new_token(TokenType::Plus, self.ch),
-            b'-' => new_token(TokenType::Minus, self.ch),
+            b'-' => {
+                if self.peek_char() == b'>' {
+                    let ch = self.ch;
+                    self.read_char();
+                    let lit = String::from_utf8(vec![ch, self.ch]).expect("Invalid UTF-8 sequence");
+                    Token {
+                        token_type: TokenType::FunctionTy,
+                        literal: lit,
+                    }
+                } else {
+                    new_token(TokenType::Minus, self.ch)
+                }
+            }
             b'*' => new_token(TokenType::Asterisk, self.ch),
             b'/' => new_token(TokenType::Slash, self.ch),
             b'<' => new_token(TokenType::LT, self.ch),
@@ -73,6 +85,7 @@ impl Lexer {
                 }
             }
             b',' => new_token(TokenType::Comma, self.ch),
+            b':' => new_token(TokenType::Colon, self.ch),
             0 => Token {
                 token_type: TokenType::Eof,
                 literal: String::from(""),
