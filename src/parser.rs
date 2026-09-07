@@ -389,6 +389,12 @@ impl Parser {
 
         let params = self.parse_function_parameters()?;
 
+        if !self.expect_peek(TokenType::FunctionTy) {
+            return None;
+        }
+
+        let _return_ty = self.parse_type()?;
+
         if !self.expect_peek(TokenType::LBrace) {
             return None;
         }
@@ -1210,7 +1216,7 @@ mod tests {
 
     #[test]
     fn test_function_literal_parsing() {
-        let input = "fn(x: int, y: int) { x + y; };";
+        let input = "fn(x: int, y: int) -> int { x + y; };";
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         let program = p.parse();
@@ -1285,15 +1291,15 @@ mod tests {
 
         let testcases = [
             TestType {
-                input: "fn () {};".to_string(),
+                input: "fn () -> int {};".to_string(),
                 expected_params: vec![],
             },
             TestType {
-                input: "fn(x: int) {};".to_string(),
+                input: "fn(x: int) -> bool {};".to_string(),
                 expected_params: vec!["x".to_string()],
             },
             TestType {
-                input: "fn(x: int, y: int, z: int) {};".to_string(),
+                input: "fn(x: int, y: int, z: int) -> int {};".to_string(),
                 expected_params: vec!["x".to_string(), "y".to_string(), "z".to_string()],
             },
         ];
