@@ -199,6 +199,7 @@ impl Parser {
             token: token,
             operator: operator,
             right: expression_right.unwrap(),
+            ty: Type::Unknown,
         })))
     }
 
@@ -214,6 +215,7 @@ impl Parser {
             operator: operator,
             left: left,
             right: right?,
+            ty: Type::Unknown,
         })))
     }
 
@@ -252,6 +254,7 @@ impl Parser {
             token: token,
             function: function,
             arguments: arguments?,
+            ty: Type::Unknown,
         })))
     }
 
@@ -295,6 +298,7 @@ impl Parser {
                 return Some(ast::Expression::Int(ast::IntegerLiteral {
                     token: self.curr_token.clone(),
                     value: v,
+                    ty: Type::Int,
                 }));
             }
             Err(e) => {
@@ -308,6 +312,7 @@ impl Parser {
         Some(ast::Expression::Bool(ast::Boolean {
             token: self.curr_token.clone(),
             value: self.curr_token_is(TokenType::True),
+            ty: Type::Bool,
         }))
     }
 
@@ -359,6 +364,7 @@ impl Parser {
             condition: condition?,
             consequence: consequence,
             alternative: if alt.is_some() { alt } else { None },
+            ty: Type::Unknown,
         })))
     }
 
@@ -393,7 +399,7 @@ impl Parser {
             return None;
         }
 
-        let _return_ty = self.parse_type()?;
+        let return_ty = self.parse_type()?;
 
         if !self.expect_peek(TokenType::LBrace) {
             return None;
@@ -401,10 +407,19 @@ impl Parser {
 
         let body = self.parse_block_statement();
 
+        // we already know function param types and return type so we just set it as it is
+        let param_types: Vec<Type> = params.iter().map(|p| p.ty.clone()).collect();
+        let fn_ty = Type::Function {
+            params: param_types,
+            return_type: Box::new(return_ty.clone()),
+        };
+
         Some(ast::Expression::Function(ast::FunctionLiteral {
             token: token,
             parameters: params,
+            return_type: return_ty,
             body: body,
+            ty: fn_ty,
         }))
     }
 
@@ -541,6 +556,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+
+    use crate::types::Type::{Bool, Int};
 
     use super::*;
 
@@ -1248,6 +1265,12 @@ mod tests {
             2,
             "function_literal.parameters mismatch, got={}",
             function_literal.parameters.len()
+        );
+
+        assert_eq!(
+            function_literal.return_type, Int,
+            "function_literal.return_type mismatch, got={:#?}",
+            function_literal.return_type
         );
 
         test_literal_expression(

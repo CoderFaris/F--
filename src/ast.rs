@@ -30,7 +30,9 @@ pub struct BlockStatement {
 pub struct FunctionLiteral {
     pub token: Token,
     pub parameters: Vec<Identifier>,
+    pub return_type: Type,
     pub body: BlockStatement,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +40,7 @@ pub struct PrefixExpression {
     pub token: Token,
     pub operator: String,
     pub right: Expression,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +49,7 @@ pub struct InfixExpression {
     pub left: Expression,
     pub operator: String,
     pub right: Expression,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
@@ -54,6 +58,7 @@ pub struct IfExpression {
     pub condition: Expression,
     pub consequence: BlockStatement,
     pub alternative: Option<BlockStatement>,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +66,7 @@ pub struct CallExpression {
     pub token: Token,
     pub function: Expression,
     pub arguments: Vec<Expression>,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
@@ -74,12 +80,14 @@ pub struct Identifier {
 pub struct IntegerLiteral {
     pub token: Token,
     pub value: isize,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]
 pub struct Boolean {
     pub token: Token,
     pub value: bool,
+    pub ty: Type,
 }
 
 pub struct Program {
@@ -321,6 +329,36 @@ impl Node for Expression {
             Expression::Function(fun) => fun.string(),
             Expression::Call(c) => c.string(),
             Expression::Placeholder => String::from("delete this"),
+        }
+    }
+}
+
+impl Expression {
+    pub fn ty(&self) -> &Type {
+        match self {
+            Expression::Int(int) => &int.ty,
+            Expression::Bool(bool) => &bool.ty,
+            Expression::Prefix(pre) => &pre.ty,
+            Expression::Infix(inf) => &inf.ty,
+            Expression::Call(c) => &c.ty,
+            Expression::If(iff) => &iff.ty,
+            Expression::Ident(ident) => &ident.ty,
+            Expression::Function(f) => &f.ty,
+            Expression::Placeholder => &Type::Unknown,
+        }
+    }
+
+    pub fn set_ty(&mut self, ty: Type) {
+        match self {
+            Expression::Int(int) => int.ty = ty,
+            Expression::Bool(bool) => bool.ty = ty,
+            Expression::Prefix(pre) => pre.ty = ty,
+            Expression::Infix(inf) => inf.ty = ty,
+            Expression::Call(c) => c.ty = ty,
+            Expression::If(iff) => iff.ty = ty,
+            Expression::Ident(ident) => ident.ty = ty,
+            Expression::Function(f) => f.ty = ty,
+            Expression::Placeholder => panic!("this won't be reached :)"),
         }
     }
 }
