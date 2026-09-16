@@ -1,0 +1,10 @@
+let outer = fn(n: int) -> int {
+    let helper = fn(m: int) -> int {
+        if (m < 0) {
+            return 0;
+        }
+        return helper(m - 1);
+    };
+    return helper(n);
+};
+outer(3);

@@ -19,39 +19,59 @@ pub fn typecheck(program: &mut ast::Program) -> Result<(), String> {
     }
 
     for stmt in program.statements.iter_mut() {
-        typecheck_stmt(stmt, &mut env)?;
+        typecheck_stmt(stmt, &mut env, None)?;
     }
     Ok(())
 }
 
-pub fn typecheck_stmt(stmt: &mut ast::Statement, env: &mut TypeEnv) -> Result<Type, String> {
+pub fn typecheck_stmt(
+    stmt: &mut ast::Statement,
+    env: &mut TypeEnv,
+    ret_ty: Option<&Type>,
+) -> Result<Type, String> {
     match stmt {
         ast::Statement::Let(let_stmt) => {
-            typecheck_expr(&mut let_stmt.value, env)?;
+            if let ast::Expression::Function(func) = &let_stmt.value {
+                env.insert(let_stmt.name.value.clone(), func.ty.clone());
+            }
+            typecheck_expr(&mut let_stmt.value, env, ret_ty)?;
             let var_type = let_stmt.value.ty().clone();
             env.insert(let_stmt.name.value.clone(), var_type.clone());
             Ok(var_type)
         }
         ast::Statement::Return(ret_stmt) => {
-            typecheck_expr(&mut ret_stmt.return_value, env)?;
-            Ok(ret_stmt.return_value.ty().clone())
+            typecheck_expr(&mut ret_stmt.return_value, env, ret_ty)?;
+            let actual = ret_stmt.return_value.ty().clone();
+            if let Some(expected) = ret_ty {
+                expected.unify(&actual).map_err(|e| {
+                    format!(
+                        "Return type mismatch: expected {:#?} got {:#?}, ({})",
+                        expected, actual, e
+                    )
+                })?;
+            }
+            Ok(actual)
         }
         ast::Statement::Expression(expr_stmt) => {
-            typecheck_expr(&mut expr_stmt.expression, env)?;
+            typecheck_expr(&mut expr_stmt.expression, env, ret_ty)?;
             Ok(expr_stmt.expression.ty().clone())
         }
         ast::Statement::Block(block_stmt) => {
             let mut block_env = env.clone();
             let mut last_type = Type::Unknown; // Type::Unit was here
             for stmt in block_stmt.statements.iter_mut() {
-                last_type = typecheck_stmt(stmt, &mut block_env)?;
+                last_type = typecheck_stmt(stmt, &mut block_env, ret_ty)?;
             }
             Ok(last_type)
         }
     }
 }
 
-pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(), String> {
+pub fn typecheck_expr(
+    expr: &mut ast::Expression,
+    env: &mut TypeEnv,
+    ret_ty: Option<&Type>,
+) -> Result<(), String> {
     match expr {
         ast::Expression::Int(int) => {
             int.ty = Type::Int;
@@ -67,7 +87,7 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
             }
         }
         ast::Expression::Prefix(pre) => {
-            typecheck_expr(&mut pre.right, env)?;
+            typecheck_expr(&mut pre.right, env, ret_ty)?;
             if pre.operator == "-" {
                 if *pre.right.ty() != Type::Int {
                     return Err(format!("Cannot negate non-integer: {:#?}", pre.right.ty()));
@@ -83,8 +103,8 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
             }
         }
         ast::Expression::Infix(inf) => {
-            typecheck_expr(&mut inf.left, env)?;
-            typecheck_expr(&mut inf.right, env)?;
+            typecheck_expr(&mut inf.left, env, ret_ty)?;
+            typecheck_expr(&mut inf.right, env, ret_ty)?;
 
             if inf.operator == "+"
                 || inf.operator == "-"
@@ -110,7 +130,7 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
                 }
                 inf.ty = Type::Bool;
             } else if inf.operator == "==" || inf.operator == "!=" {
-                let _ = inf.left.ty().unify(inf.right.ty());
+                inf.left.ty().unify(inf.right.ty())?;
                 inf.ty = Type::Bool;
             } else {
                 return Err(format!("Invalid infix operator: {}", inf.operator));
@@ -118,7 +138,7 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
         }
 
         ast::Expression::Call(c) => {
-            typecheck_expr(&mut c.function, env)?;
+            typecheck_expr(&mut c.function, env, ret_ty)?;
             let func_type: Type;
             let func_name: String;
             match &c.function {
@@ -146,8 +166,8 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
                 }
 
                 for (arg, param_type) in c.arguments.iter_mut().zip(params.iter()) {
-                    typecheck_expr(arg, env)?;
-                    let _ = param_type.unify(arg.ty());
+                    typecheck_expr(arg, env, ret_ty)?;
+                    param_type.unify(arg.ty())?;
                 }
                 c.ty = *return_type;
             } else {
@@ -156,7 +176,7 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
         }
 
         ast::Expression::If(if_stmt) => {
-            typecheck_expr(&mut if_stmt.condition, env)?;
+            typecheck_expr(&mut if_stmt.condition, env, ret_ty)?;
             if *if_stmt.condition.ty() != Type::Bool {
                 return Err(format!(
                     "If condition must be boolean, got {:#?}",
@@ -168,7 +188,7 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
             let mut consequence_ty = Type::Unknown; // Unit?
 
             for stmt in if_stmt.consequence.statements.iter_mut() {
-                consequence_ty = typecheck_stmt(stmt, &mut consequence_env)?;
+                consequence_ty = typecheck_stmt(stmt, &mut consequence_env, ret_ty)?;
             }
 
             let mut alternative_env = env.clone();
@@ -180,7 +200,7 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
                 alternative_stmts = alternative.unwrap();
 
                 for stmt in alternative_stmts.statements.iter_mut() {
-                    alternative_ty = typecheck_stmt(stmt, &mut alternative_env)?
+                    alternative_ty = typecheck_stmt(stmt, &mut alternative_env, ret_ty)?
                 }
             }
 
@@ -195,11 +215,11 @@ pub fn typecheck_expr(expr: &mut ast::Expression, env: &mut TypeEnv) -> Result<(
             }
             let mut body_type = Type::Unknown; // unit?
             for stmt in f.body.statements.iter_mut() {
-                body_type = typecheck_stmt(stmt, &mut local_env)?;
+                body_type = typecheck_stmt(stmt, &mut local_env, Some(&f.return_type))?;
             }
 
             if f.return_type != Type::Unknown && body_type != Type::Unknown {
-                let _ = f.return_type.unify(&body_type)?;
+                f.return_type.unify(&body_type)?;
             }
         }
         _ => panic!("unknown expression in typecheck_expr"),
@@ -218,7 +238,11 @@ mod tests {
         let mut p = Parser::new(l);
         let mut program = p.parse();
         if p.errors().len() > 0 {
-            return Err(String::from("Parser errors inside code"));
+            let mut errlist: Vec<String> = vec![];
+            for err in &p.errors() {
+                errlist.push(err.clone());
+            }
+            return Err(String::from(errlist.join(", ")));
         }
         typecheck(&mut program)?;
         Ok(program)
@@ -286,5 +310,162 @@ mod tests {
         if let ast::Statement::Expression(e) = &program.statements[1] {
             assert_eq!(*e.expression.ty(), Type::Int);
         }
+    }
+
+    #[test]
+    fn test_early_return_type_mismatch_should_fail() {
+        let program = typecheck_ast(
+            "let f = fn(a: int) -> int {
+                if (a > 0) {
+                    return true;
+                }
+                return 1;
+              }
+              f(5);
+        ",
+        );
+        assert!(
+            program.is_err(),
+            "expected a type error because the early `return true;` doesn't match the declared return type `int`, but got: {:?}",
+            program
+        );
+    }
+
+    #[test]
+    fn test_undefined_variable_should_fail() {
+        let program = typecheck_ast("x;");
+        assert!(
+            program.is_err(),
+            "referencing an undefined variable should fail"
+        );
+    }
+
+    #[test]
+    fn test_undefined_function_call_should_fail() {
+        let program = typecheck_ast("foo(1, 2);");
+        assert!(
+            program.is_err(),
+            "calling an undefined function should fail"
+        );
+    }
+
+    #[test]
+    fn test_call_non_function_should_fail() {
+        let program = typecheck_ast(
+            "let x = 5;
+             x(1, 2);",
+        );
+        assert!(program.is_err(), "calling a non-function value should fail");
+    }
+
+    #[test]
+    fn test_wrong_argument_count_should_fail() {
+        let program = typecheck_ast(
+            "let add = fn(a: int, b: int) -> int { return a + b; };
+             add(1);",
+        );
+        assert!(
+            program.is_err(),
+            "calling with too few arguments should fail"
+        );
+    }
+
+    #[test]
+    fn test_wrong_argument_type_should_fail() {
+        let program = typecheck_ast(
+            "let add = fn(a: int, b: int) -> int { return a + b; };
+             add(1, true);",
+        );
+        assert!(
+            program.is_err(),
+            "calling with a mismatched argument type should fail"
+        );
+    }
+
+    #[test]
+    fn test_prefix_negate_non_integer_should_fail() {
+        let program = typecheck_ast("-true;");
+        assert!(program.is_err(), "negating a boolean with `-` should fail");
+    }
+
+    #[test]
+    fn test_prefix_bang_non_boolean_should_fail() {
+        let program = typecheck_ast("!5;");
+        assert!(program.is_err(), "applying `!` to an integer should fail");
+    }
+
+    #[test]
+    fn test_equality_type_mismatch_should_fail() {
+        let program = typecheck_ast("5 == true;");
+        assert!(
+            program.is_err(),
+            "comparing an int and a bool with `==` should fail"
+        );
+    }
+
+    #[test]
+    fn test_shadowing_inside_if_does_not_leak_outward() {
+        let program = typecheck_ast(
+            "let x = 5;
+             if (x > 0) {
+                 let x = true;
+             }
+             x + 1;",
+        )
+        .unwrap();
+        if let ast::Statement::Expression(e) = &program.statements[2] {
+            assert_eq!(*e.expression.ty(), Type::Int);
+        } else {
+            panic!("expected last statement to be an expression statement");
+        }
+    }
+
+    #[test]
+    fn test_nested_local_function_recursion() {
+        let program = typecheck_ast(
+            "let outer = fn(n: int) -> int {
+                 let helper = fn(m: int) -> int {
+                     if (m < 0) {
+                         return 0;
+                     }
+                     return helper(m - 1);
+                 };
+                 return helper(n);
+             };
+             outer(3);",
+        );
+        assert!(
+            program.is_ok(),
+            "expected nested local recursive function to type-check, got: {:?}",
+            program
+        );
+    }
+
+    #[test]
+    fn test_correct_return_type_with_early_return_passes() {
+        let program = typecheck_ast(
+            "let f = fn(a: int) -> int {
+                 if (a > 0) {
+                     return 1;
+                 }
+                 return 0;
+             };
+             f(5);",
+        );
+        assert!(
+            program.is_ok(),
+            "expected correctly typed early return to pass: {:?}",
+            program
+        );
+    }
+
+    #[test]
+    fn test_function_passed_wrong_arity_nested_call() {
+        let program = typecheck_ast(
+            "let add = fn(a: int, b: int) -> int { return a + b; };
+             let use_add = fn() -> int { return add(1, 2, 3); };
+             use_add();",
+        );
+        assert!(program.is_err(), "nested call with wrong arity should fail");
     }
 }

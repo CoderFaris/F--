@@ -90,6 +90,7 @@ pub struct Boolean {
     pub ty: Type,
 }
 
+#[derive(Debug)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }

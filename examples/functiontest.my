@@ -1,4 +1,5 @@
 let add = fn(x: int, y: int) -> int {
-    return x + y;
+    let helper = fn(m: int, n: int) -> int {
+
+    }
 }
-// make lexer and parser compatible with adding function parameters and return types
