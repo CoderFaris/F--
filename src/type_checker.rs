@@ -269,6 +269,8 @@ mod tests {
         let program = typecheck_ast("3 > 2").unwrap();
         if let ast::Statement::Expression(e) = &program.statements[0] {
             assert_eq!(*e.expression.ty(), Type::Bool);
+        } else {
+            panic!("expected statement to be ExpressionStatement");
         }
     }
 
@@ -284,6 +286,8 @@ mod tests {
         .unwrap();
         if let ast::Statement::Expression(e) = &program.statements[1] {
             assert_eq!(*e.expression.ty(), Type::Int);
+        } else {
+            panic!("expected statement to be ExpressionStatement");
         }
     }
 
@@ -309,6 +313,8 @@ mod tests {
         .unwrap();
         if let ast::Statement::Expression(e) = &program.statements[1] {
             assert_eq!(*e.expression.ty(), Type::Int);
+        } else {
+            panic!("expected statement to be ExpressionStatement");
         }
     }
 
