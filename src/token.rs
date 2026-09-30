@@ -27,6 +27,8 @@ pub enum TokenType {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     Function,
     FunctionTy,
     Colon,
@@ -37,6 +39,7 @@ pub enum TokenType {
     Boolean,
     If,
     Else,
+    While,
     Return,
 }
 
@@ -64,6 +67,7 @@ static KEYWORDS: LazyLock<HashMap<String, TokenType>> = LazyLock::new(|| {
     keywords.insert(String::from("false"), TokenType::False);
     keywords.insert(String::from("int"), TokenType::Integer);
     keywords.insert(String::from("bool"), TokenType::Boolean);
+    keywords.insert(String::from("while"), TokenType::While);
     keywords
 });
 

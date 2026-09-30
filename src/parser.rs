@@ -71,7 +71,9 @@ impl Parser {
         parser.register_prefix(TokenType::LParen, Parser::parse_grouped_expression);
         parser.register_prefix(TokenType::RParen, Parser::parse_grouped_expression);
         parser.register_prefix(TokenType::If, Parser::parse_if_expression);
+        parser.register_prefix(TokenType::While, Parser::parse_while_expression);
         parser.register_prefix(TokenType::Function, Parser::parse_function_literal);
+        parser.register_prefix(TokenType::LBracket, Parser::parse_array_literal);
         parser.register_infix(TokenType::LParen, Parser::parse_call_expression);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
@@ -359,6 +361,7 @@ impl Parser {
             alt = Some(self.parse_block_statement());
         }
 
+        // not really sure about the current token here
         Some(ast::Expression::If(Box::new(ast::IfExpression {
             token: self.curr_token.clone(),
             condition: condition?,
@@ -384,6 +387,34 @@ impl Parser {
             token: self.curr_token.clone(),
             statements: statements,
         }
+    }
+
+    fn parse_while_expression(&mut self) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+
+        if !self.expect_peek(TokenType::LParen) {
+            return None;
+        }
+        self.next_token();
+
+        let condition = self.parse_expression(LOWEST);
+
+        if !self.expect_peek(TokenType::RParen) {
+            return None;
+        }
+
+        if !self.expect_peek(TokenType::LBrace) {
+            return None;
+        }
+
+        let body = self.parse_block_statement();
+
+        Some(ast::Expression::While(Box::new(ast::WhileExpression {
+            token: token,
+            condition: condition?,
+            body: body,
+            ty: Type::Unknown,
+        })))
     }
 
     fn parse_function_literal(&mut self) -> Option<ast::Expression> {
@@ -421,6 +452,41 @@ impl Parser {
             body: body,
             ty: fn_ty,
         }))
+    }
+
+    fn parse_array_literal(&mut self) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+
+        let elements = self.parse_expression_list(TokenType::RBracket);
+
+        Some(ast::Expression::Array(ast::ArrayLiteral {
+            token: token,
+            elements: elements?,
+            ty: Type::Unknown,
+        }))
+    }
+
+    fn parse_expression_list(&mut self, end: TokenType) -> Option<Vec<ast::Expression>> {
+        let mut elements = Vec::new();
+        if self.peek_token_is(end) {
+            self.next_token();
+            return Some(elements);
+        }
+
+        self.next_token();
+        elements.push(self.parse_expression(LOWEST)?);
+
+        while self.peek_token_is(TokenType::Comma) {
+            self.next_token();
+            self.next_token();
+            elements.push(self.parse_expression(LOWEST)?);
+        }
+
+        if !self.expect_peek(end) {
+            return None;
+        }
+
+        Some(elements)
     }
 
     fn parse_function_parameters(&mut self) -> Option<Vec<ast::Identifier>> {
@@ -1228,6 +1294,100 @@ mod tests {
             if !test_identifier(expr_stmt.expression.clone(), "y".to_string()) {
                 return;
             }
+        }
+    }
+
+    #[test]
+    fn test_while_expression() {
+        let input = "while (i < 3) {i};";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expr = match &program.statements[0] {
+            ast::Statement::Expression(e) => Some(e),
+            _ => None,
+        };
+
+        let whileexpr = match &expr.unwrap().expression {
+            ast::Expression::While(w) => Some(w.clone()),
+            _ => None,
+        };
+
+        let while_expression = *whileexpr.unwrap();
+
+        if !test_infix_expression(
+            while_expression.condition,
+            &TestLiteral::Ident("i".to_string()),
+            "<".to_string(),
+            &TestLiteral::Int(3),
+        ) {
+            return;
+        }
+
+        assert_eq!(
+            while_expression.body.statements.len(),
+            1,
+            "while body has more than 1 statement, got={}",
+            while_expression.body.statements.len()
+        );
+    }
+
+    #[test]
+    fn test_array_expression() {
+        let input = "[1, 2 * 2, 3 + 3]";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        let expr = match &program.statements[0] {
+            ast::Statement::Expression(e) => Some(e),
+            _ => None,
+        };
+
+        let arraylit = match &expr.unwrap().expression {
+            ast::Expression::Array(a) => Some(a),
+            _ => None,
+        };
+
+        let array_literal = arraylit.unwrap();
+
+        assert_eq!(
+            array_literal.elements.len(),
+            3,
+            "array_literal length expected=3, got={}",
+            array_literal.elements.len()
+        );
+
+        if !test_integer_literal(array_literal.elements[0].clone(), 1) {
+            return;
+        }
+
+        if !test_infix_expression(
+            array_literal.elements[1].clone(),
+            &TestLiteral::Int(2),
+            "*".to_string(),
+            &TestLiteral::Int(2),
+        ) {
+            return;
+        }
+
+        if !test_infix_expression(
+            array_literal.elements[2].clone(),
+            &TestLiteral::Int(3),
+            "+".to_string(),
+            &TestLiteral::Int(3),
+        ) {
+            return;
         }
     }
 

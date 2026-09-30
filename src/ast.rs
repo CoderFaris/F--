@@ -1,4 +1,4 @@
-use crate::{token::Token, types::Type};
+use crate::{ast, token::Token, types::Type};
 use std::any::Any;
 
 #[derive(Clone, Debug)]
@@ -62,6 +62,14 @@ pub struct IfExpression {
 }
 
 #[derive(Clone, Debug)]
+pub struct WhileExpression {
+    pub token: Token,
+    pub condition: Expression,
+    pub body: BlockStatement,
+    pub ty: Type,
+}
+
+#[derive(Clone, Debug)]
 pub struct CallExpression {
     pub token: Token,
     pub function: Expression,
@@ -87,6 +95,13 @@ pub struct IntegerLiteral {
 pub struct Boolean {
     pub token: Token,
     pub value: bool,
+    pub ty: Type,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArrayLiteral {
+    pub token: Token,
+    pub elements: Vec<Expression>,
     pub ty: Type,
 }
 
@@ -211,6 +226,16 @@ impl Node for IfExpression {
     }
 }
 
+impl Node for WhileExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        format!("while {} {}", self.condition.string(), self.body.string())
+    }
+}
+
 impl Node for CallExpression {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
@@ -257,6 +282,19 @@ impl Node for Boolean {
 
     fn string(&self) -> String {
         self.token.literal.clone()
+    }
+}
+
+impl Node for ArrayLiteral {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+    fn string(&self) -> String {
+        let mut elements = Vec::new();
+        for el in self.elements.iter() {
+            elements.push(el.string());
+        }
+        format!("[{}]", elements.join(", "))
     }
 }
 
@@ -313,8 +351,10 @@ impl Node for Expression {
             Expression::Prefix(pre) => pre.token_literal(),
             Expression::Infix(inf) => inf.token_literal(),
             Expression::If(ifexp) => ifexp.token_literal(),
+            Expression::While(w) => w.token_literal(),
             Expression::Function(fun) => fun.token_literal(),
             Expression::Call(c) => c.token_literal(),
+            Expression::Array(a) => a.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -327,8 +367,10 @@ impl Node for Expression {
             Expression::Prefix(pre) => pre.string(),
             Expression::Infix(inf) => inf.string(),
             Expression::If(ifexp) => ifexp.string(),
+            Expression::While(w) => w.string(),
             Expression::Function(fun) => fun.string(),
             Expression::Call(c) => c.string(),
+            Expression::Array(a) => a.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -343,8 +385,10 @@ impl Expression {
             Expression::Infix(inf) => &inf.ty,
             Expression::Call(c) => &c.ty,
             Expression::If(iff) => &iff.ty,
+            Expression::While(w) => &w.ty,
             Expression::Ident(ident) => &ident.ty,
             Expression::Function(f) => &f.ty,
+            Expression::Array(a) => &a.ty,
             Expression::Placeholder => &Type::Unknown,
         }
     }
@@ -357,8 +401,10 @@ impl Expression {
             Expression::Infix(inf) => inf.ty = ty,
             Expression::Call(c) => c.ty = ty,
             Expression::If(iff) => iff.ty = ty,
+            Expression::While(w) => w.ty = ty,
             Expression::Ident(ident) => ident.ty = ty,
             Expression::Function(f) => f.ty = ty,
+            Expression::Array(a) => a.ty = ty,
             Expression::Placeholder => panic!("this won't be reached :)"),
         }
     }
@@ -398,8 +444,10 @@ pub enum Expression {
     Prefix(Box<PrefixExpression>),
     Infix(Box<InfixExpression>),
     If(Box<IfExpression>),
+    While(Box<WhileExpression>),
     Function(FunctionLiteral),
     Call(Box<CallExpression>),
+    Array(ArrayLiteral),
     Placeholder, // delete this when starting to add expressions
 }
 

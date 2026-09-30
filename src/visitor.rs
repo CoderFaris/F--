@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        self, BlockStatement, Boolean, CallExpression, ExpressionStatement, FunctionLiteral,
-        Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression,
-        ReturnStatement,
+        self, ArrayLiteral, BlockStatement, Boolean, CallExpression, ExpressionStatement,
+        FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement,
+        PrefixExpression, ReturnStatement, WhileExpression,
     },
     token, types,
 };
@@ -19,6 +19,8 @@ pub trait ExprVisitor {
             ast::Expression::If(ifexpr) => self.visit_if(*ifexpr.clone()),
             ast::Expression::Call(c) => self.visit_call(*c.clone()),
             ast::Expression::Function(f) => self.visit_function(f.clone()),
+            ast::Expression::While(w) => self.visit_while(*w.clone()),
+            ast::Expression::Array(a) => self.visit_array(a.clone()),
             _ => panic!("this will never execute :)"),
         }
     }
@@ -74,6 +76,18 @@ pub trait ExprVisitor {
         ast::Expression::If(Box::new(ifexpr))
     }
 
+    fn visit_while(&mut self, mut w: WhileExpression) -> ast::Expression {
+        let visited_expr = self.visit_expr(&w.condition);
+        let visited_body = self.visit_block(w.body.clone());
+        w.condition = visited_expr;
+
+        if let ast::Statement::Block(b) = visited_body {
+            w.body = b;
+        }
+
+        ast::Expression::While(Box::new(w))
+    }
+
     fn visit_call(&mut self, mut c: CallExpression) -> ast::Expression {
         let visited_args: Vec<ast::Expression> =
             c.arguments.iter().map(|arg| self.visit_expr(arg)).collect();
@@ -87,6 +101,12 @@ pub trait ExprVisitor {
             f.body = b;
         }
         ast::Expression::Function(f)
+    }
+
+    fn visit_array(&mut self, mut a: ArrayLiteral) -> ast::Expression {
+        let visited_elements = a.elements.iter().map(|e| self.visit_expr(e)).collect();
+        a.elements = visited_elements;
+        ast::Expression::Array(a)
     }
 
     // statement related
@@ -433,6 +453,23 @@ mod tests {
             }
         }
         panic!("expected `a + 6` with the right-hand side folded and left-hand side untouched");
+    }
+
+    #[test]
+    fn test_constant_array_folding() {
+        let program = optimize_ast("let a = [1, 2+2, 3*3]").unwrap();
+        if let ast::Statement::Let(l) = &program.statements[0] {
+            if let ast::Expression::Array(a) = &l.value {
+                if let ast::Expression::Int(i) = &a.elements[2] {
+                    assert_eq!(i.value, 9, "constant folding should work here");
+                    return;
+                }
+            }
+        }
+        panic!(
+            "program.statements[0] not let, got={:#?}",
+            &program.statements[0]
+        );
     }
 
     // one test also for multiple optimization passes

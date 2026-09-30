@@ -6,6 +6,8 @@ pub enum Type {
         params: Vec<Type>,
         return_type: Box<Type>,
     },
+    Array(Box<Type>),
+    Void,
     Unknown,
 }
 
@@ -15,6 +17,8 @@ impl Type {
             (Type::Unknown, t) | (t, Type::Unknown) => Ok(t.clone()),
             (Type::Int, Type::Int) => Ok(Type::Int),
             (Type::Bool, Type::Bool) => Ok(Type::Bool),
+            (Type::Void, Type::Void) => Ok(Type::Void),
+            (Type::Array(a), Type::Array(b)) => Ok(Type::Array(Box::new(a.unify(b)?))),
             (
                 Type::Function {
                     params: p1,

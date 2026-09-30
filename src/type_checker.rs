@@ -58,7 +58,7 @@ pub fn typecheck_stmt(
         }
         ast::Statement::Block(block_stmt) => {
             let mut block_env = env.clone();
-            let mut last_type = Type::Unknown; // Type::Unit was here
+            let mut last_type = Type::Void;
             for stmt in block_stmt.statements.iter_mut() {
                 last_type = typecheck_stmt(stmt, &mut block_env, ret_ty)?;
             }
@@ -185,27 +185,25 @@ pub fn typecheck_expr(
             }
 
             let mut consequence_env = env.clone();
-            let mut consequence_ty = Type::Unknown; // Unit?
+            let mut consequence_ty = Type::Void;
 
             for stmt in if_stmt.consequence.statements.iter_mut() {
                 consequence_ty = typecheck_stmt(stmt, &mut consequence_env, ret_ty)?;
             }
 
-            let mut alternative_env = env.clone();
-            let mut alternative_ty = Type::Unknown;
+            match if_stmt.alternative.as_mut() {
+                Some(alt) => {
+                    let mut alternative_env = env.clone();
+                    let mut alternative_ty = Type::Void;
 
-            let mut alternative_stmts: BlockStatement;
-            let alternative = if_stmt.alternative.clone();
-            if alternative.is_some() {
-                alternative_stmts = alternative.unwrap();
+                    for stmt in alt.statements.iter_mut() {
+                        alternative_ty = typecheck_stmt(stmt, &mut alternative_env, ret_ty)?;
+                    }
 
-                for stmt in alternative_stmts.statements.iter_mut() {
-                    alternative_ty = typecheck_stmt(stmt, &mut alternative_env, ret_ty)?
+                    if_stmt.ty = consequence_ty.unify(&alternative_ty)?;
                 }
+                None => if_stmt.ty = Type::Void,
             }
-
-            // unify both branches
-            if_stmt.ty = consequence_ty.unify(&alternative_ty)?;
         }
 
         ast::Expression::Function(f) => {
@@ -213,14 +211,45 @@ pub fn typecheck_expr(
             for ident in f.parameters.iter_mut() {
                 local_env.insert(ident.value.clone(), ident.ty.clone());
             }
-            let mut body_type = Type::Unknown; // unit?
+            let mut body_type = Type::Void;
             for stmt in f.body.statements.iter_mut() {
                 body_type = typecheck_stmt(stmt, &mut local_env, Some(&f.return_type))?;
             }
 
-            if f.return_type != Type::Unknown && body_type != Type::Unknown {
+            if f.return_type != Type::Unknown && body_type != Type::Void {
                 f.return_type.unify(&body_type)?;
             }
+        }
+
+        ast::Expression::While(w) => {
+            typecheck_expr(&mut w.condition, env, ret_ty)?;
+
+            if *w.condition.ty() != Type::Bool {
+                return Err(format!(
+                    "While condition must be boolean, got {:#?}",
+                    w.condition.ty()
+                ));
+            }
+            let mut body_env = env.clone();
+            for stmt in w.body.statements.iter_mut() {
+                typecheck_stmt(stmt, &mut body_env, ret_ty)?;
+            }
+            w.ty = Type::Void;
+        }
+
+        ast::Expression::Array(a) => {
+            let mut elem_ty = Type::Unknown;
+            for el in a.elements.iter_mut() {
+                typecheck_expr(el, env, ret_ty)?;
+                elem_ty = elem_ty.unify(el.ty()).map_err(|_| {
+                    format!(
+                        "Array elements must all have the same type, expected {:?}, got {:?}",
+                        elem_ty,
+                        el.ty()
+                    )
+                })?;
+            }
+            a.ty = Type::Array(Box::new(elem_ty))
         }
         _ => panic!("unknown expression in typecheck_expr"),
     }
@@ -473,5 +502,91 @@ mod tests {
              use_add();",
         );
         assert!(program.is_err(), "nested call with wrong arity should fail");
+    }
+
+    #[test]
+    fn test_array_typecheck() {
+        let program = typecheck_ast("let arr = [1, 2*2, 3+3]");
+        assert!(program.is_ok(), "expected regular array definition to pass");
+    }
+
+    #[test]
+    fn test_array_typecheck_ty() {
+        let program = typecheck_ast("let arr = [1, 2*2, 3+3]").unwrap();
+        if let ast::Statement::Let(l) = &program.statements[0] {
+            if let ast::Expression::Array(a) = &l.value {
+                assert_eq!(a.ty, Type::Array(Box::new(Type::Int)));
+            }
+        } else {
+            panic!("statement not let, got={:#?}", &program.statements[0]);
+        }
+    }
+
+    #[test]
+    fn test_array_typecheck_one_element() {
+        let program = typecheck_ast("let arr = [1]");
+        assert!(
+            program.is_ok(),
+            "expected regular array definition with 1 element to pass"
+        );
+    }
+
+    #[test]
+    fn test_array_typecheck_zero_elements() {
+        let program = typecheck_ast("let arr = []");
+        assert!(
+            program.is_ok(),
+            "expected regular array definition with 0 elements to pass"
+        );
+    }
+
+    #[test]
+    fn test_array_should_fail() {
+        let program = typecheck_ast("let arr = [1, 2*2, false]");
+        assert!(program.is_err(), "array with different types should fail");
+    }
+
+    #[test]
+    fn test_while_condition_must_be_bool() {
+        let program = typecheck_ast("while (1) { 2; }");
+        assert!(program.is_err(), "non-boolean while condition should fail");
+    }
+
+    #[test]
+    fn test_while_valid_passes() {
+        let program = typecheck_ast("while (1 < 2) { 3; }");
+        assert!(
+            program.is_ok(),
+            "valid while loop should pass: {:?}",
+            program
+        );
+    }
+
+    #[test]
+    fn test_while_body_return_checked_against_function_return_type() {
+        let program = typecheck_ast(
+            "let f = fn() -> int {
+                 while (true) {
+                     return true;
+                 }
+                 return 1;
+             };",
+        );
+        assert!(
+            program.is_err(),
+            "return inside while body must match function return type"
+        );
+    }
+
+    #[test]
+    fn test_while_body_scope_does_not_leak() {
+        let program = typecheck_ast(
+            "while (true) { let inner = 1; }
+             inner;",
+        );
+        assert!(
+            program.is_err(),
+            "variable declared in while body should not be visible outside"
+        );
     }
 }

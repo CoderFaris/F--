@@ -53,6 +53,8 @@ impl Lexer {
             b')' => new_token(TokenType::RParen, self.ch),
             b'{' => new_token(TokenType::LBrace, self.ch),
             b'}' => new_token(TokenType::RBrace, self.ch),
+            b'[' => new_token(TokenType::LBracket, self.ch),
+            b']' => new_token(TokenType::RBracket, self.ch),
             b'+' => new_token(TokenType::Plus, self.ch),
             b'-' => {
                 if self.peek_char() == b'>' {
@@ -210,6 +212,7 @@ mod tests {
 
         10 == 10;
         10 != 9;
+        [1, 2];
         ";
 
         struct TestType {
@@ -505,6 +508,30 @@ mod tests {
             TestType {
                 expected_type: TokenType::Int,
                 expected_literal: "9",
+            },
+            TestType {
+                expected_type: TokenType::Semicolon,
+                expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::LBracket,
+                expected_literal: "[",
+            },
+            TestType {
+                expected_type: TokenType::Int,
+                expected_literal: "1",
+            },
+            TestType {
+                expected_type: TokenType::Comma,
+                expected_literal: ",",
+            },
+            TestType {
+                expected_type: TokenType::Int,
+                expected_literal: "2",
+            },
+            TestType {
+                expected_type: TokenType::RBracket,
+                expected_literal: "]",
             },
             TestType {
                 expected_type: TokenType::Semicolon,
