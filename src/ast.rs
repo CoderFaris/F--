@@ -104,6 +104,13 @@ pub struct ArrayLiteral {
     pub elements: Vec<Expression>,
     pub ty: Type,
 }
+#[derive(Clone, Debug)]
+pub struct IndexExpression {
+    pub token: Token,
+    pub left: Expression,
+    pub index: Expression,
+    pub ty: Type,
+}
 
 #[derive(Debug)]
 pub struct Program {
@@ -298,6 +305,16 @@ impl Node for ArrayLiteral {
     }
 }
 
+impl Node for IndexExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+
+    fn string(&self) -> String {
+        format!("({}[{}])", self.left.string(), self.index.string())
+    }
+}
+
 impl Node for FunctionLiteral {
     fn token_literal(&self) -> String {
         self.token.literal.clone()
@@ -355,6 +372,7 @@ impl Node for Expression {
             Expression::Function(fun) => fun.token_literal(),
             Expression::Call(c) => c.token_literal(),
             Expression::Array(a) => a.token_literal(),
+            Expression::Index(index) => index.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -371,6 +389,7 @@ impl Node for Expression {
             Expression::Function(fun) => fun.string(),
             Expression::Call(c) => c.string(),
             Expression::Array(a) => a.string(),
+            Expression::Index(index) => index.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -389,6 +408,7 @@ impl Expression {
             Expression::Ident(ident) => &ident.ty,
             Expression::Function(f) => &f.ty,
             Expression::Array(a) => &a.ty,
+            Expression::Index(index) => &index.ty,
             Expression::Placeholder => &Type::Unknown,
         }
     }
@@ -405,6 +425,7 @@ impl Expression {
             Expression::Ident(ident) => ident.ty = ty,
             Expression::Function(f) => f.ty = ty,
             Expression::Array(a) => a.ty = ty,
+            Expression::Index(index) => index.ty = ty,
             Expression::Placeholder => panic!("this won't be reached :)"),
         }
     }
@@ -448,7 +469,8 @@ pub enum Expression {
     Function(FunctionLiteral),
     Call(Box<CallExpression>),
     Array(ArrayLiteral),
-    Placeholder, // delete this when starting to add expressions
+    Index(Box<IndexExpression>),
+    Placeholder,
 }
 
 #[cfg(test)]

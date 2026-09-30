@@ -251,6 +251,28 @@ pub fn typecheck_expr(
             }
             a.ty = Type::Array(Box::new(elem_ty))
         }
+        ast::Expression::Index(index) => {
+            typecheck_expr(&mut index.left, env, ret_ty)?;
+
+            let elem_ty = match index.left.ty() {
+                Type::Array(elem) => (**elem).clone(),
+                other => {
+                    return Err(format!(
+                        "IndexExpression.left must be of type array, got={:#?}",
+                        other
+                    ));
+                }
+            };
+
+            typecheck_expr(&mut index.index, env, ret_ty)?;
+            if *index.index.ty() != Type::Int {
+                return Err(format!(
+                    "IndexExpression.index must be of type int, got={:#?}",
+                    index.index.ty()
+                ));
+            }
+            index.ty = elem_ty;
+        }
         _ => panic!("unknown expression in typecheck_expr"),
     }
     Ok(())
@@ -588,5 +610,31 @@ mod tests {
             program.is_err(),
             "variable declared in while body should not be visible outside"
         );
+    }
+
+    #[test]
+    fn test_index_expression_undefined() {
+        let program = typecheck_ast("let a = arr[3];");
+        assert!(program.is_err(), "arr is not defined");
+    }
+
+    #[test]
+    fn test_index_expression_int() {
+        let program = typecheck_ast(
+            "let arr = [1, 2, 3, 4];
+            let a = arr[3];
+            ",
+        );
+        assert!(program.is_ok(), "arr is defined");
+    }
+
+    #[test]
+    fn test_index_expression_bool() {
+        let program = typecheck_ast(
+            "let arr = [true, false, true, false];
+            let a = arr[3];
+            ",
+        );
+        assert!(program.is_ok(), "arr is defined");
     }
 }

@@ -1,8 +1,8 @@
 use crate::{
     ast::{
         self, ArrayLiteral, BlockStatement, Boolean, CallExpression, ExpressionStatement,
-        FunctionLiteral, Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement,
-        PrefixExpression, ReturnStatement, WhileExpression,
+        FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
+        IntegerLiteral, LetStatement, PrefixExpression, ReturnStatement, WhileExpression,
     },
     token, types,
 };
@@ -21,6 +21,7 @@ pub trait ExprVisitor {
             ast::Expression::Function(f) => self.visit_function(f.clone()),
             ast::Expression::While(w) => self.visit_while(*w.clone()),
             ast::Expression::Array(a) => self.visit_array(a.clone()),
+            ast::Expression::Index(index) => self.visit_index_expr(*index.clone()),
             _ => panic!("this will never execute :)"),
         }
     }
@@ -107,6 +108,14 @@ pub trait ExprVisitor {
         let visited_elements = a.elements.iter().map(|e| self.visit_expr(e)).collect();
         a.elements = visited_elements;
         ast::Expression::Array(a)
+    }
+
+    fn visit_index_expr(&mut self, mut index: IndexExpression) -> ast::Expression {
+        let visited_left = self.visit_expr(&index.left);
+        let visited_index = self.visit_expr(&index.index);
+        index.left = visited_left;
+        index.index = visited_index;
+        ast::Expression::Index(Box::new(index))
     }
 
     // statement related
@@ -469,6 +478,29 @@ mod tests {
         panic!(
             "program.statements[0] not let, got={:#?}",
             &program.statements[0]
+        );
+    }
+
+    #[test]
+    fn test_constant_index_folding() {
+        let program = optimize_ast(
+            "
+            let a = [1, 2+2, 3*3]
+            let b = a[1+1]
+            ",
+        )
+        .unwrap();
+        if let ast::Statement::Let(l) = &program.statements[1] {
+            if let ast::Expression::Index(index) = &l.value {
+                if let ast::Expression::Int(i) = &index.index {
+                    assert_eq!(i.value, 2, "constant folding should work here");
+                    return;
+                }
+            }
+        }
+        panic!(
+            "program.statements[1] not let, got={:#?}",
+            &program.statements[1]
         );
     }
 

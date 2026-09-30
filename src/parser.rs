@@ -19,6 +19,7 @@ static PRECEDENDES: LazyLock<HashMap<TokenType, isize>> = LazyLock::new(|| {
     precedences.insert(TokenType::Asterisk, PRODUCT);
     precedences.insert(TokenType::Slash, PRODUCT);
     precedences.insert(TokenType::LParen, CALL);
+    precedences.insert(TokenType::LBracket, INDEX);
     precedences
 });
 
@@ -42,6 +43,7 @@ iota!(
     const PRODUCT: isize = iota + 1;
     const PREFIX: isize = iota + 1;
     const CALL: isize = iota + 1;
+    const INDEX: isize = iota + 1;
 );
 
 impl Parser {
@@ -74,6 +76,7 @@ impl Parser {
         parser.register_prefix(TokenType::While, Parser::parse_while_expression);
         parser.register_prefix(TokenType::Function, Parser::parse_function_literal);
         parser.register_prefix(TokenType::LBracket, Parser::parse_array_literal);
+        parser.register_infix(TokenType::LBracket, Parser::parse_index_expression);
         parser.register_infix(TokenType::LParen, Parser::parse_call_expression);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Parser::parse_infix_expression);
@@ -464,6 +467,21 @@ impl Parser {
             elements: elements?,
             ty: Type::Unknown,
         }))
+    }
+
+    fn parse_index_expression(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+        self.next_token();
+        let parsed_expr = self.parse_expression(LOWEST)?;
+        if !self.expect_peek(TokenType::RBracket) {
+            return None;
+        }
+        Some(ast::Expression::Index(Box::new(ast::IndexExpression {
+            token: token,
+            left: left,
+            index: parsed_expr,
+            ty: Type::Unknown,
+        })))
     }
 
     fn parse_expression_list(&mut self, end: TokenType) -> Option<Vec<ast::Expression>> {
@@ -1148,6 +1166,14 @@ mod tests {
                 expected: "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))".to_string(),
             },
             TestType {
+                input: "a * [1, 2, 3, 4][b * c] * d;".to_string(),
+                expected: "((a * ([1, 2, 3, 4][(b * c)])) * d)".to_string(),
+            },
+            TestType {
+                input: "add(a * b[2], b[1], 2 * [1, 2][1])".to_string(),
+                expected: "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))".to_string(),
+            },
+            TestType {
                 input: "add(a + b + c * d / f + g);".to_string(),
                 expected: "add((((a + b) + ((c * d) / f)) + g))".to_string(),
             },
@@ -1388,6 +1414,34 @@ mod tests {
             &TestLiteral::Int(3),
         ) {
             return;
+        }
+    }
+
+    #[test]
+    fn test_parsing_index_expression() {
+        let input = "myArray[i + 1]";
+
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        if let ast::Statement::Expression(expr) = &program.statements[0] {
+            if let ast::Expression::Index(index) = &expr.expression {
+                if !test_identifier(index.left.clone(), "myArray".to_string()) {
+                    return;
+                }
+                if !test_infix_expression(
+                    index.index.clone(),
+                    &TestLiteral::Ident("i".to_string()),
+                    "+".to_string(),
+                    &TestLiteral::Int(1),
+                ) {
+                    return;
+                }
+            } else {
+                panic!("expressionstatement not an indexexpression");
+            }
         }
     }
 
