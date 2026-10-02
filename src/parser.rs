@@ -568,6 +568,29 @@ impl Parser {
                 self.next_token();
                 Some(Type::Bool)
             }
+            TokenType::LBracket => {
+                self.next_token();
+                let arrtype = match self.peek_token.token_type {
+                    TokenType::Integer => {
+                        self.next_token();
+                        Some(Type::Array(Box::new(Type::Int)))
+                    }
+                    TokenType::Boolean => {
+                        self.next_token();
+                        Some(Type::Array(Box::new(Type::Bool)))
+                    }
+                    _ => {
+                        self.errors.push("expected type".to_string());
+                        None
+                    }
+                };
+                if !self.peek_token_is(TokenType::RBracket) {
+                    self.errors.push("expected ]".to_string());
+                    return None;
+                }
+                self.next_token();
+                Some(arrtype?)
+            }
             _ => {
                 self.errors.push("expected type".to_string());
                 None
@@ -1576,6 +1599,95 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_function_literal_parsing_array() {
+        let input = "fn(x: [int], y: [int]) -> [int] { x + y; };";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
+
+        assert_eq!(
+            program.statements.len(),
+            1,
+            "program does not have enough statements, got={}",
+            program.statements.len()
+        );
+
+        let expr = match &program.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let expr_unwrapped = expr.unwrap();
+
+        let function_lit = match &expr_unwrapped.expression {
+            ast::Expression::Function(fun) => Some(fun),
+            _ => None,
+        };
+
+        let function_literal = function_lit.unwrap();
+
+        assert_eq!(
+            function_literal.parameters.len(),
+            2,
+            "function_literal.parameters mismatch, got={}",
+            function_literal.parameters.len()
+        );
+
+        assert_eq!(
+            function_literal.parameters[0].ty,
+            Type::Array(Box::new(Type::Int)),
+            "function_literal.parameters mismatch, got={:#?}",
+            function_literal.parameters[0].ty
+        );
+
+        assert_eq!(
+            function_literal.parameters[1].ty,
+            Type::Array(Box::new(Type::Int)),
+            "function_literal.parameters mismatch, got={:#?}",
+            function_literal.parameters[1].ty
+        );
+
+        assert_eq!(
+            function_literal.return_type,
+            Type::Array(Box::new(Type::Int)),
+            "function_literal.return_type mismatch, got={:#?}",
+            function_literal.return_type
+        );
+
+        test_literal_expression(
+            ast::Expression::Ident(function_literal.parameters[0].clone()),
+            &TestLiteral::Ident("x".to_string()),
+        );
+
+        test_literal_expression(
+            ast::Expression::Ident(function_literal.parameters[1].clone()),
+            &TestLiteral::Ident("y".to_string()),
+        );
+
+        assert_eq!(
+            function_literal.body.statements.len(),
+            1,
+            "function_literal.body.statements length mismatch, got={}",
+            function_literal.body.statements.len()
+        );
+
+        let func_body = match &function_literal.body.statements[0] {
+            ast::Statement::Expression(expr) => Some(expr),
+            _ => None,
+        };
+
+        let function_body = func_body.unwrap();
+
+        test_infix_expression(
+            function_body.expression.clone(),
+            &TestLiteral::Ident("x".to_string()),
+            "+".to_string(),
+            &TestLiteral::Ident("y".to_string()),
+        );
     }
 
     #[test]

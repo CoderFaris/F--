@@ -637,4 +637,26 @@ mod tests {
         );
         assert!(program.is_ok(), "arr is defined");
     }
+
+    #[test]
+    fn test_wrong_argument_type_should_fail_arrays() {
+        let program = typecheck_ast(
+            "let add = fn(a: [int], b: int) -> int { return a + b; };
+             add(1, true);",
+        );
+        assert!(
+            program.is_err(),
+            "calling with a mismatched argument type should fail"
+        );
+    }
+
+    #[test]
+    fn test_array_in_function_signature() {
+        let program = typecheck_ast(
+            "let f = fn(a: [int]) -> [int] {
+                return a;
+            }",
+        );
+        assert!(program.is_ok(), "receiving and returing an array");
+    }
 }
