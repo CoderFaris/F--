@@ -1,3 +1,7 @@
+use inkwell::types::{ArrayType, IntType};
+
+use crate::types::Type::Array;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     Int,

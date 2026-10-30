@@ -1,9 +1,11 @@
 use colored::Colorize;
 use compiler::ast::Node;
 use compiler::codegen::Compiler;
+use compiler::codegen::jit_run;
 use compiler::lexer::Lexer;
 use compiler::parser::Parser;
 use compiler::token::TokenType;
+use compiler::type_checker::typecheck;
 use inkwell::context::Context;
 use std::env;
 use std::fs::File;
@@ -38,31 +40,36 @@ fn read_from_file() -> () {
         return;
     }
     let mut p = Parser::new(l);
-    let program = p.parse();
+    let mut program = p.parse();
+    if p.errors().len() > 0 {
+        print_parser_errors(&p.errors());
+        return;
+    }
     if show_ast {
-        if p.errors().len() > 0 {
-            print_parser_errors(&p.errors());
-            return;
-        }
-
         println!("{} \n", program.string());
         return;
     }
-    let context = Context::create();
-    let mut compiler = Compiler::new(&context);
+    let optimized_program = typecheck(&mut program);
 
-    let result = compiler.compile_program(program);
-    match result {
-        Ok(_) => {}
-        Err(e) => println!("{}", e),
+    let result = jit_run(program);
+
+    let res = match result {
+        Ok(v) => v,
+        Err(e) => panic!("{}", e),
     };
 
-    if show_ir {
-        println!("{}", compiler.module.print_to_string().to_string());
-        return;
-    }
+    println!("{}", res);
 
-    println!("No flag meaning compilation, although it's nothing for now");
+    // let result = compiler.compile_program(program);
+    // match result {
+    //     Ok(_) => {}
+    //     Err(e) => println!("{}", e),
+    // };
+
+    // if show_ir {
+    //     println!("{}", compiler.module.print_to_string().to_string());
+    //     return;
+    // }
 }
 
 fn print_parser_errors(errors: &Vec<String>) {
