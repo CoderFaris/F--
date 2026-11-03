@@ -4,7 +4,10 @@ use std::{collections::HashMap, hash::Hash, sync::LazyLock};
 use crate::{
     ast::{self, BlockStatement, Node},
     lexer::Lexer,
-    token::{self, Token, TokenType},
+    token::{
+        self, Token,
+        TokenType::{self, Assign},
+    },
     types::Type,
 };
 
@@ -20,6 +23,7 @@ static PRECEDENDES: LazyLock<HashMap<TokenType, isize>> = LazyLock::new(|| {
     precedences.insert(TokenType::Slash, PRODUCT);
     precedences.insert(TokenType::LParen, CALL);
     precedences.insert(TokenType::LBracket, INDEX);
+    precedences.insert(TokenType::Assign, ASSIGN);
     precedences
 });
 
@@ -37,6 +41,7 @@ type InfixParseFn = fn(&mut Parser, ast::Expression) -> Option<ast::Expression>;
 
 iota!(
     const LOWEST: isize = iota + 1;
+    const ASSIGN: isize = iota + 1;
     const EQUALS: isize = iota + 1;
     const LESSGREATER: isize = iota + 1;
     const SUM: isize = iota + 1;
@@ -76,6 +81,7 @@ impl Parser {
         parser.register_prefix(TokenType::While, Parser::parse_while_expression);
         parser.register_prefix(TokenType::Function, Parser::parse_function_literal);
         parser.register_prefix(TokenType::LBracket, Parser::parse_array_literal);
+        parser.register_infix(TokenType::Assign, Parser::parse_assignment_statement);
         parser.register_infix(TokenType::LBracket, Parser::parse_index_expression);
         parser.register_infix(TokenType::LParen, Parser::parse_call_expression);
         parser.register_infix(TokenType::Plus, Parser::parse_infix_expression);
@@ -193,6 +199,29 @@ impl Parser {
             token: token,
             expression: expression,
         })
+    }
+
+    fn parse_assignment_statement(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+        let token = self.curr_token.clone();
+
+        let target = match left {
+            ast::Expression::Ident(ident) => ident,
+            _ => {
+                self.errors.push("invalid assignment target".to_string());
+                return None;
+            }
+        };
+
+        self.next_token();
+
+        let value = self.parse_expression(LOWEST)?;
+
+        Some(ast::Expression::Assign(Box::new(ast::AssignExpression {
+            token: token,
+            target: target,
+            value: value,
+            ty: Type::Unknown,
+        })))
     }
 
     fn parse_prefix_expression(&mut self) -> Option<ast::Expression> {
@@ -1788,6 +1817,15 @@ mod tests {
                 call_expression.arguments.len()
             );
         }
+    }
+
+    #[test]
+    fn test_assignment_parsing() {
+        let input = "i = i + 3";
+        let mut l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_parser_errors(&p);
     }
 
     fn check_parser_errors(parser: &Parser) {

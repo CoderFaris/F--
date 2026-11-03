@@ -112,6 +112,14 @@ pub struct IndexExpression {
     pub ty: Type,
 }
 
+#[derive(Clone, Debug)]
+pub struct AssignExpression {
+    pub token: Token,
+    pub target: Identifier,
+    pub value: Expression,
+    pub ty: Type,
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub statements: Vec<Statement>,
@@ -176,6 +184,15 @@ impl Node for BlockStatement {
             s += &stmt.string()[..];
         }
         s
+    }
+}
+
+impl Node for AssignExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+    fn string(&self) -> String {
+        format!("{:#?} = {:#?}", self.target, self.value)
     }
 }
 
@@ -373,6 +390,7 @@ impl Node for Expression {
             Expression::Call(c) => c.token_literal(),
             Expression::Array(a) => a.token_literal(),
             Expression::Index(index) => index.token_literal(),
+            Expression::Assign(expr) => expr.token_literal(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -390,6 +408,7 @@ impl Node for Expression {
             Expression::Call(c) => c.string(),
             Expression::Array(a) => a.string(),
             Expression::Index(index) => index.string(),
+            Expression::Assign(expr) => expr.string(),
             Expression::Placeholder => String::from("delete this"),
         }
     }
@@ -409,6 +428,7 @@ impl Expression {
             Expression::Function(f) => &f.ty,
             Expression::Array(a) => &a.ty,
             Expression::Index(index) => &index.ty,
+            Expression::Assign(expr) => &expr.ty,
             Expression::Placeholder => &Type::Unknown,
         }
     }
@@ -426,6 +446,7 @@ impl Expression {
             Expression::Function(f) => f.ty = ty,
             Expression::Array(a) => a.ty = ty,
             Expression::Index(index) => index.ty = ty,
+            Expression::Assign(expr) => expr.ty = ty,
             Expression::Placeholder => panic!("this won't be reached :)"),
         }
     }
@@ -470,6 +491,7 @@ pub enum Expression {
     Call(Box<CallExpression>),
     Array(ArrayLiteral),
     Index(Box<IndexExpression>),
+    Assign(Box<AssignExpression>),
     Placeholder,
 }
 

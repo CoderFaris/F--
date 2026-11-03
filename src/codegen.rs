@@ -195,10 +195,6 @@ impl<'ctx> Compiler<'ctx> {
         match ty {
             Type::Int => Ok(BasicTypeEnum::IntType(self.context.i64_type())),
             Type::Bool => Ok(BasicTypeEnum::IntType(self.context.bool_type())),
-            // Type::Array(arrtype) => {
-            //     let _ = self.to_llvm_type(&**arrtype)?;
-            //     Err("Call to_llvm_array_type with known length".to_string())
-            // }
             Type::Array(_) => Ok(BasicTypeEnum::PointerType(
                 self.context.ptr_type(AddressSpace::default()).into(),
             )),
@@ -581,6 +577,16 @@ impl<'ctx> Compiler<'ctx> {
                 Ok(value)
             }
 
+            ast::Expression::Assign(assign) => {
+                let ptr = self
+                    .lookup_var(&assign.target.value)
+                    .ok_or_else(|| format!("Unknown variable {}", assign.target.value))?;
+                let value = self.compile_expr(&assign.value)?;
+                self.builder
+                    .build_store(ptr, value)
+                    .map_err(|e| format!("codegen error: {}", e))?;
+                Ok(value)
+            }
             ast::Expression::Function(_) => {
                 Err("function literals must be bound with `let name = fn...`;".to_string())
             }
@@ -614,6 +620,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::parser::Parser;
     use crate::type_checker::{self, typecheck};
+    use crate::visitor::optimize_program;
 
     fn typecheck_ast(code: &str) -> Result<ast::Program, String> {
         let l = Lexer::new(code);
@@ -627,6 +634,7 @@ mod tests {
             return Err(String::from(errlist.join(", ")));
         }
         typecheck(&mut program)?;
+        let program = optimize_program(program);
         Ok(program)
     }
 
@@ -832,7 +840,6 @@ mod tests {
         assert_eq!(run("let a = [10, 20, 30]; let i = 2; a[i] + a[0];"), 40);
     }
 
-    // Adjust the array type syntax to whatever your parse_type accepts.
     #[test]
     fn test_run_array_parameter() {
         assert_eq!(
@@ -842,18 +849,15 @@ mod tests {
         );
     }
 
-    // ---------- loops: enable this once we make assignment (i = i + 1) ----------
-    // #[test]
-    // fn test_run_while_sum() {
-    //     assert_eq!(
-    //         run("let i = 0; let sum = 0;
-    //              while (i < 5) { sum = sum + i; i = i + 1; }
-    //              sum;"),
-    //         10
-    //     );
-    // }
-
-    // brittle tests, prone to modification
+    #[test]
+    fn test_run_while_sum() {
+        assert_eq!(
+            run("let i = 0; let sum = 0;
+                 while (i < 5) { sum = sum + i; i = i + 1; }
+                 sum;"),
+            10
+        );
+    }
 
     #[test]
     fn test_ir_function_signature() {

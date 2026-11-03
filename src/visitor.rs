@@ -1,8 +1,9 @@
 use crate::{
     ast::{
-        self, ArrayLiteral, BlockStatement, Boolean, CallExpression, ExpressionStatement,
-        FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
-        IntegerLiteral, LetStatement, PrefixExpression, ReturnStatement, WhileExpression,
+        self, ArrayLiteral, AssignExpression, BlockStatement, Boolean, CallExpression,
+        ExpressionStatement, FunctionLiteral, Identifier, IfExpression, IndexExpression,
+        InfixExpression, IntegerLiteral, LetStatement, PrefixExpression, ReturnStatement,
+        WhileExpression,
     },
     token, types,
 };
@@ -22,6 +23,7 @@ pub trait ExprVisitor {
             ast::Expression::While(w) => self.visit_while(*w.clone()),
             ast::Expression::Array(a) => self.visit_array(a.clone()),
             ast::Expression::Index(index) => self.visit_index_expr(*index.clone()),
+            ast::Expression::Assign(assign) => self.visit_assign(*assign.clone()),
             _ => panic!("this will never execute :)"),
         }
     }
@@ -116,6 +118,12 @@ pub trait ExprVisitor {
         index.left = visited_left;
         index.index = visited_index;
         ast::Expression::Index(Box::new(index))
+    }
+
+    fn visit_assign(&mut self, mut assign: AssignExpression) -> ast::Expression {
+        let visited_val = self.visit_expr(&assign.value);
+        assign.value = visited_val;
+        ast::Expression::Assign(Box::new(assign))
     }
 
     // statement related
@@ -283,7 +291,7 @@ impl ExprVisitor for ConstantFolder {
     }
 }
 
-fn optimize_program(mut program: ast::Program) -> ast::Program {
+pub fn optimize_program(mut program: ast::Program) -> ast::Program {
     // multipass optimization
 
     // first we fold

@@ -273,6 +273,19 @@ pub fn typecheck_expr(
             }
             index.ty = elem_ty;
         }
+        ast::Expression::Assign(assign) => {
+            typecheck_expr(&mut assign.value, env, ret_ty)?;
+            let ident_ty = env
+                .get(&assign.target.value)
+                .ok_or_else(|| format!("undefined variable"))?;
+            let ty = ident_ty.unify(&assign.value.ty()).map_err(|e| {
+                format!(
+                    "assignement mismatch, expected {:#?}, got {:#?}, ({})",
+                    assign.target, assign.value, e
+                )
+            })?;
+            assign.ty = ty;
+        }
         _ => panic!("unknown expression in typecheck_expr"),
     }
     Ok(())
