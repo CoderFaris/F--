@@ -1,4 +1,4 @@
 // this is a comment
-let five = 5 + 10 * 5; // this is a variable
+let five = 5 + 10 - 5; // this is a variable
 five;
-let ten = 10;
+let ten = 2;

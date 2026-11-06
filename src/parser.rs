@@ -58,10 +58,12 @@ impl Parser {
             curr_token: Token {
                 token_type: TokenType::Placeholder,
                 literal: String::from("PLACEHOLDER"),
+                line: 0,
             },
             peek_token: Token {
                 token_type: TokenType::Placeholder,
                 literal: String::from("PLACEHOLDER"),
+                line: 0,
             },
             errors: Vec::new(),
             prefix_parse_fn: HashMap::new(),
@@ -81,6 +83,7 @@ impl Parser {
         parser.register_prefix(TokenType::While, Parser::parse_while_expression);
         parser.register_prefix(TokenType::Function, Parser::parse_function_literal);
         parser.register_prefix(TokenType::LBracket, Parser::parse_array_literal);
+        parser.register_prefix(TokenType::Newline, Parser::parse_newline);
         parser.register_infix(TokenType::Assign, Parser::parse_assignment_statement);
         parser.register_infix(TokenType::LBracket, Parser::parse_index_expression);
         parser.register_infix(TokenType::LParen, Parser::parse_call_expression);
@@ -587,6 +590,11 @@ impl Parser {
         Some(identifiers)
     }
 
+    // a token that does not matter
+    fn parse_newline(&mut self) -> Option<ast::Expression> {
+        return None;
+    }
+
     fn parse_type(&mut self) -> Option<Type> {
         match self.peek_token.token_type {
             TokenType::Integer => {
@@ -647,10 +655,9 @@ impl Parser {
 
     fn peek_error(&mut self, token: TokenType) {
         let error_message = format!(
-            "Expected next token to be: {:#?}, got {:#?}",
-            token, self.peek_token.token_type
+            "(Line: {}) Expected next token to be: {:#?}, got {:#?}",
+            self.curr_token.line, token, self.peek_token.token_type
         );
-
         self.errors.push(error_message);
     }
 

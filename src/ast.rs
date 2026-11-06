@@ -506,11 +506,13 @@ mod tests {
                 token: Token {
                     token_type: crate::token::TokenType::Let,
                     literal: "let".to_string(),
+                    line: 0,
                 },
                 name: Identifier {
                     token: Token {
                         token_type: crate::token::TokenType::Ident,
                         literal: "my_var".to_string(),
+                        line: 0,
                     },
                     value: "my_var".to_string(),
                     ty: Type::Unknown,
@@ -519,6 +521,7 @@ mod tests {
                     token: Token {
                         token_type: crate::token::TokenType::Ident,
                         literal: "another_var".to_string(),
+                        line: 0,
                     },
                     value: "another_var".to_string(),
                     ty: Type::Unknown,

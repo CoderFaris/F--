@@ -41,12 +41,14 @@ pub enum TokenType {
     Else,
     While,
     Return,
+    Newline,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
     pub literal: String,
+    pub line: usize,
 }
 
 impl Display for Token {

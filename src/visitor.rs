@@ -199,6 +199,7 @@ impl ExprVisitor for ConstantFolder {
             token: token::Token {
                 token_type: token::TokenType::Placeholder,
                 literal: String::from("PLACEHOLDER"),
+                line: 0,
             },
             value: 0,
             ty: types::Type::Int,
@@ -208,6 +209,7 @@ impl ExprVisitor for ConstantFolder {
             token: token::Token {
                 token_type: token::TokenType::Placeholder,
                 literal: String::from("PLACEHOLDER"),
+                line: 0,
             },
             value: false,
             ty: types::Type::Bool,

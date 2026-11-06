@@ -5,6 +5,7 @@ pub struct Lexer {
     position: usize,
     read_position: usize,
     ch: u8,
+    lines: usize,
 }
 
 impl Lexer {
@@ -14,6 +15,7 @@ impl Lexer {
             position: 0,
             read_position: 0,
             ch: 0,
+            lines: 0,
         };
         l.read_char();
         return l;
@@ -43,19 +45,20 @@ impl Lexer {
                     Token {
                         token_type: TokenType::EQ,
                         literal: lit,
+                        line: self.lines,
                     }
                 } else {
-                    new_token(TokenType::Assign, self.ch)
+                    new_token(TokenType::Assign, self.ch, self.lines)
                 }
             }
-            b';' => new_token(TokenType::Semicolon, self.ch),
-            b'(' => new_token(TokenType::LParen, self.ch),
-            b')' => new_token(TokenType::RParen, self.ch),
-            b'{' => new_token(TokenType::LBrace, self.ch),
-            b'}' => new_token(TokenType::RBrace, self.ch),
-            b'[' => new_token(TokenType::LBracket, self.ch),
-            b']' => new_token(TokenType::RBracket, self.ch),
-            b'+' => new_token(TokenType::Plus, self.ch),
+            b';' => new_token(TokenType::Semicolon, self.ch, self.lines),
+            b'(' => new_token(TokenType::LParen, self.ch, self.lines),
+            b')' => new_token(TokenType::RParen, self.ch, self.lines),
+            b'{' => new_token(TokenType::LBrace, self.ch, self.lines),
+            b'}' => new_token(TokenType::RBrace, self.ch, self.lines),
+            b'[' => new_token(TokenType::LBracket, self.ch, self.lines),
+            b']' => new_token(TokenType::RBracket, self.ch, self.lines),
+            b'+' => new_token(TokenType::Plus, self.ch, self.lines),
             b'-' => {
                 if self.peek_char() == b'>' {
                     let ch = self.ch;
@@ -64,15 +67,16 @@ impl Lexer {
                     Token {
                         token_type: TokenType::FunctionTy,
                         literal: lit,
+                        line: self.lines,
                     }
                 } else {
-                    new_token(TokenType::Minus, self.ch)
+                    new_token(TokenType::Minus, self.ch, self.lines)
                 }
             }
-            b'*' => new_token(TokenType::Asterisk, self.ch),
-            b'/' => new_token(TokenType::Slash, self.ch),
-            b'<' => new_token(TokenType::LT, self.ch),
-            b'>' => new_token(TokenType::GT, self.ch),
+            b'*' => new_token(TokenType::Asterisk, self.ch, self.lines),
+            b'/' => new_token(TokenType::Slash, self.ch, self.lines),
+            b'<' => new_token(TokenType::LT, self.ch, self.lines),
+            b'>' => new_token(TokenType::GT, self.ch, self.lines),
             b'!' => {
                 if self.peek_char() == b'=' {
                     let ch = self.ch;
@@ -81,16 +85,22 @@ impl Lexer {
                     Token {
                         token_type: TokenType::NotEq,
                         literal: lit,
+                        line: self.lines,
                     }
                 } else {
-                    new_token(TokenType::Bang, self.ch)
+                    new_token(TokenType::Bang, self.ch, self.lines)
                 }
             }
-            b',' => new_token(TokenType::Comma, self.ch),
-            b':' => new_token(TokenType::Colon, self.ch),
+            b',' => new_token(TokenType::Comma, self.ch, self.lines),
+            b':' => new_token(TokenType::Colon, self.ch, self.lines),
+            b'\n' => {
+                self.lines += 1;
+                new_token(TokenType::Newline, self.ch, self.lines)
+            }
             0 => Token {
                 token_type: TokenType::Eof,
                 literal: String::from(""),
+                line: self.lines,
             },
             0_u8..=60_u8 | 62_u8..=u8::MAX => {
                 if is_letter(self.ch) {
@@ -104,6 +114,7 @@ impl Lexer {
                     return Token {
                         token_type: tok_type,
                         literal: str_lit.to_string(),
+                        line: self.lines,
                     };
                     // only supports integers for now
                 } else if is_digit(self.ch) {
@@ -116,11 +127,13 @@ impl Lexer {
                     return Token {
                         token_type: tok_type,
                         literal: str_lit.to_string(),
+                        line: self.lines,
                     };
                 } else {
                     Token {
                         token_type: TokenType::Illegal,
                         literal: String::from(""),
+                        line: self.lines,
                     }
                 }
             }
@@ -158,7 +171,7 @@ impl Lexer {
 
     fn consume_whitespace_and_comments(&mut self) {
         loop {
-            while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
+            while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\r' {
                 self.read_char();
             }
 
@@ -173,10 +186,11 @@ impl Lexer {
     }
 }
 
-fn new_token(tokenType: TokenType, ch: u8) -> Token {
+fn new_token(tokenType: TokenType, ch: u8, line: usize) -> Token {
     Token {
         token_type: tokenType,
         literal: (ch as char).to_string(),
+        line: line,
     }
 }
 
@@ -196,20 +210,17 @@ mod tests {
     fn test_next_token() {
         let input = "let five = 5;
         let ten = 10;
-
         let add = fn(x, y) {
             x + y;
         };
         let result = add(five, ten);
         !-/*5;
         5 < 10 > 5;
-
         if(5 < 10) {
             return true;
         } else {
             return false;
         }
-
         10 == 10;
         10 != 9;
         [1, 2];
@@ -242,6 +253,10 @@ mod tests {
                 expected_literal: ";",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Let,
                 expected_literal: "let",
             },
@@ -260,6 +275,10 @@ mod tests {
             TestType {
                 expected_type: TokenType::Semicolon,
                 expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::Let,
@@ -302,6 +321,10 @@ mod tests {
                 expected_literal: "{",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Ident,
                 expected_literal: "x",
             },
@@ -318,12 +341,20 @@ mod tests {
                 expected_literal: ";",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::RBrace,
                 expected_literal: "}",
             },
             TestType {
                 expected_type: TokenType::Semicolon,
                 expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::Let,
@@ -366,6 +397,10 @@ mod tests {
                 expected_literal: ";",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Bang,
                 expected_literal: "!",
             },
@@ -390,6 +425,10 @@ mod tests {
                 expected_literal: ";",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Int,
                 expected_literal: "5",
             },
@@ -412,6 +451,10 @@ mod tests {
             TestType {
                 expected_type: TokenType::Semicolon,
                 expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::If,
@@ -442,6 +485,10 @@ mod tests {
                 expected_literal: "{",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Return,
                 expected_literal: "return",
             },
@@ -452,6 +499,10 @@ mod tests {
             TestType {
                 expected_type: TokenType::Semicolon,
                 expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::RBrace,
@@ -466,6 +517,10 @@ mod tests {
                 expected_literal: "{",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Return,
                 expected_literal: "return",
             },
@@ -478,8 +533,16 @@ mod tests {
                 expected_literal: ";",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::RBrace,
                 expected_literal: "}",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::Int,
@@ -498,6 +561,10 @@ mod tests {
                 expected_literal: ";",
             },
             TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
+            },
+            TestType {
                 expected_type: TokenType::Int,
                 expected_literal: "10",
             },
@@ -512,6 +579,10 @@ mod tests {
             TestType {
                 expected_type: TokenType::Semicolon,
                 expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::LBracket,
@@ -536,6 +607,10 @@ mod tests {
             TestType {
                 expected_type: TokenType::Semicolon,
                 expected_literal: ";",
+            },
+            TestType {
+                expected_type: TokenType::Newline,
+                expected_literal: "\n",
             },
             TestType {
                 expected_type: TokenType::Eof,
