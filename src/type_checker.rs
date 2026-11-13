@@ -45,8 +45,8 @@ pub fn typecheck_stmt(
             if let Some(expected) = ret_ty {
                 expected.unify(&actual).map_err(|e| {
                     format!(
-                        "Return type mismatch: expected {:#?} got {:#?}, ({})",
-                        expected, actual, e
+                        "(Line: {}) Return type mismatch: expected {:#?} got {:#?}, ({})",
+                        ret_stmt.token.line, expected, actual, e
                     )
                 })?;
             }
@@ -83,23 +83,37 @@ pub fn typecheck_expr(
             if let Some(ty) = env.get(&ident.value) {
                 ident.ty = ty.clone();
             } else {
-                return Err(format!("Undefined var: {}", ident.value));
+                return Err(format!(
+                    "(Line: {}) Undefined var: {}",
+                    ident.token.line, ident.value
+                ));
             }
         }
         ast::Expression::Prefix(pre) => {
             typecheck_expr(&mut pre.right, env, ret_ty)?;
             if pre.operator == "-" {
                 if *pre.right.ty() != Type::Int {
-                    return Err(format!("Cannot negate non-integer: {:#?}", pre.right.ty()));
+                    return Err(format!(
+                        "(Line: {}) Cannot negate non-integer: {:#?}",
+                        pre.token.line,
+                        pre.right.ty()
+                    ));
                 }
                 pre.ty = Type::Int;
             } else if pre.operator == "!" {
                 if *pre.right.ty() != Type::Bool {
-                    return Err(format!("Cannot negate non-boolean: {:#?}", pre.right.ty()));
+                    return Err(format!(
+                        "(Line: {}) Cannot negate non-boolean: {:#?}",
+                        pre.token.line,
+                        pre.right.ty()
+                    ));
                 }
                 pre.ty = Type::Bool;
             } else {
-                return Err(format!("Invalid prefix operator: {}", pre.operator));
+                return Err(format!(
+                    "(Line: {}) Invalid prefix operator: {}",
+                    pre.token.line, pre.operator
+                ));
             }
         }
         ast::Expression::Infix(inf) => {
@@ -113,7 +127,8 @@ pub fn typecheck_expr(
             {
                 if *inf.left.ty() != Type::Int || *inf.right.ty() != Type::Int {
                     return Err(format!(
-                        "Arithmetic operation requires both types to be int, got {:#?} and {:#?}",
+                        "(Line: {}) Arithmetic operation requires both types to be int, got {:#?} and {:#?}",
+                        inf.token.line,
                         inf.left.ty(),
                         inf.right.ty()
                     ));
@@ -123,7 +138,8 @@ pub fn typecheck_expr(
             } else if inf.operator == "<" || inf.operator == ">" {
                 if *inf.left.ty() != Type::Int || *inf.right.ty() != Type::Int {
                     return Err(format!(
-                        "Comparison requires both types to be int, got {:#?} and {:#?}",
+                        "(Line: {}) Comparison requires both types to be int, got {:#?} and {:#?}",
+                        inf.token.line,
                         inf.left.ty(),
                         inf.right.ty()
                     ));
@@ -133,7 +149,10 @@ pub fn typecheck_expr(
                 inf.left.ty().unify(inf.right.ty())?;
                 inf.ty = Type::Bool;
             } else {
-                return Err(format!("Invalid infix operator: {}", inf.operator));
+                return Err(format!(
+                    "(Line: {}) Invalid infix operator: {}",
+                    inf.token.line, inf.operator
+                ));
             }
         }
 
@@ -145,11 +164,22 @@ pub fn typecheck_expr(
                 ast::Expression::Ident(ident) => {
                     func_type = env
                         .get(&ident.value)
-                        .ok_or_else(|| format!("Undefined function: {}", ident.value.clone()))?
+                        .ok_or_else(|| {
+                            format!(
+                                "(Line: {}) Undefined function: {}",
+                                c.token.line,
+                                ident.value.clone()
+                            )
+                        })?
                         .clone();
                     func_name = ident.value.clone();
                 }
-                _ => return Err(format!("Function call can only be from identifier")), // not sure whether I can do this
+                _ => {
+                    return Err(format!(
+                        "(Line: {}) Function call can only be from identifier",
+                        c.token.line
+                    ));
+                }
             }
             if let Type::Function {
                 params,
@@ -158,7 +188,8 @@ pub fn typecheck_expr(
             {
                 if c.arguments.len() != params.len() {
                     return Err(format!(
-                        "Function {} expects {} args, got {} args",
+                        "(Line: {}) Function {} expects {} args, got {} args",
+                        c.token.line,
                         func_name,
                         params.len(),
                         c.arguments.len()
@@ -171,7 +202,10 @@ pub fn typecheck_expr(
                 }
                 c.ty = *return_type;
             } else {
-                return Err(format!("{} is not a function", func_name));
+                return Err(format!(
+                    "(Line: {}) {} is not a function",
+                    c.token.line, func_name
+                ));
             }
         }
 
@@ -179,7 +213,8 @@ pub fn typecheck_expr(
             typecheck_expr(&mut if_stmt.condition, env, ret_ty)?;
             if *if_stmt.condition.ty() != Type::Bool {
                 return Err(format!(
-                    "If condition must be boolean, got {:#?}",
+                    "(Line: {}) If condition must be boolean, got {:#?}",
+                    if_stmt.token.line,
                     if_stmt.condition.ty()
                 ));
             }
@@ -226,7 +261,8 @@ pub fn typecheck_expr(
 
             if *w.condition.ty() != Type::Bool {
                 return Err(format!(
-                    "While condition must be boolean, got {:#?}",
+                    "(Line: {}) While condition must be boolean, got {:#?}",
+                    w.token.line,
                     w.condition.ty()
                 ));
             }
@@ -243,7 +279,8 @@ pub fn typecheck_expr(
                 typecheck_expr(el, env, ret_ty)?;
                 elem_ty = elem_ty.unify(el.ty()).map_err(|_| {
                     format!(
-                        "Array elements must all have the same type, expected {:?}, got {:?}",
+                        "(Line: {}) Array elements must all have the same type, expected {:?}, got {:?}",
+                        a.token.line,
                         elem_ty,
                         el.ty()
                     )
@@ -258,8 +295,8 @@ pub fn typecheck_expr(
                 Type::Array(elem) => (**elem).clone(),
                 other => {
                     return Err(format!(
-                        "IndexExpression.left must be of type array, got={:#?}",
-                        other
+                        "(Line: {}) IndexExpression.left must be of type array, got={:#?}",
+                        index.token.line, other
                     ));
                 }
             };
@@ -267,7 +304,8 @@ pub fn typecheck_expr(
             typecheck_expr(&mut index.index, env, ret_ty)?;
             if *index.index.ty() != Type::Int {
                 return Err(format!(
-                    "IndexExpression.index must be of type int, got={:#?}",
+                    "(Line: {}) IndexExpression.index must be of type int, got={:#?}",
+                    index.token.line,
                     index.index.ty()
                 ));
             }
@@ -280,8 +318,8 @@ pub fn typecheck_expr(
                 .ok_or_else(|| format!("undefined variable"))?;
             let ty = ident_ty.unify(&assign.value.ty()).map_err(|e| {
                 format!(
-                    "assignement mismatch, expected {:#?}, got {:#?}, ({})",
-                    assign.target, assign.value, e
+                    "(Line: {}) assignement mismatch, expected {:#?}, got {:#?}, ({})",
+                    assign.token.line, assign.target, assign.value, e
                 )
             })?;
             assign.ty = ty;

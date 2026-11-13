@@ -1,4 +1,11 @@
 // this is a comment
-let five = 5 + 10 - 5; // this is a variable
-five;
-let ten = 2;
+let five = 5;
+let i = 0;
+let double_n_times = fn(x: int, y: int) -> int {
+    while(i < y) {
+        x = x * 2;
+        i = i + 1;
+    }
+    return x;
+}
+five = double_n_times(five);

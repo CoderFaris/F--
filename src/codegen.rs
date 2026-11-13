@@ -83,7 +83,11 @@ impl<'ctx> Compiler<'ctx> {
             if is_function_let {
                 continue;
             }
-            last = self.compile_stmt(stmt)?;
+            let is_expr_stmt = matches!(&stmt, ast::Statement::Expression(_));
+            let value = self.compile_stmt(stmt)?;
+            if is_expr_stmt {
+                last = value;
+            }
         }
 
         let ret = match last {
@@ -277,7 +281,10 @@ impl<'ctx> Compiler<'ctx> {
             ast::Statement::Let(l) => {
                 let value = self.compile_expr(&l.value.clone())?;
                 let name = l.name.value;
-                let function = self.current_fn.ok_or("`let` used outside a function")?;
+                let function = self.current_fn.ok_or(format!(
+                    "(Line: {}) `let` used outside a function",
+                    l.token.line
+                ))?;
                 let alloca = self.create_entry_block_alloca(&function, &name, l.value.ty())?;
                 self.builder.build_store(alloca, value).unwrap();
                 self.declare_var(name, alloca);
@@ -286,7 +293,7 @@ impl<'ctx> Compiler<'ctx> {
             ast::Statement::Return(r) => {
                 let value = self.compile_expr(&r.return_value)?;
                 self.builder.build_return(Some(&value)).unwrap();
-                Ok(Some(value)) // Ok(Some(value)) in original
+                Ok(Some(value))
             }
             ast::Statement::Expression(e) => {
                 let value = self.compile_expr(&e.expression)?;
@@ -319,44 +326,44 @@ impl<'ctx> Compiler<'ctx> {
                     self.builder
                         .build_int_add(l, r, "addtmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build add".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build add", inf.token.line))
                 } else if inf.operator == "-".to_string() {
                     self.builder
                         .build_int_sub(l, r, "subtmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build sub".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build sub", inf.token.line))
                 } else if inf.operator == "*".to_string() {
                     self.builder
                         .build_int_mul(l, r, "multmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build mul".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build mul", inf.token.line))
                 } else if inf.operator == "/".to_string() {
                     self.builder
                         .build_int_signed_div(l, r, "divtmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build div".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build div", inf.token.line))
                 } else if inf.operator == ">".to_string() {
                     self.builder
                         .build_int_compare(inkwell::IntPredicate::SGT, l, r, "gtcmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build gtcmp".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build gtcmp", inf.token.line))
                 } else if inf.operator == "<".to_string() {
                     self.builder
                         .build_int_compare(inkwell::IntPredicate::SLT, l, r, "ltcmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build ltcmp".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build ltcmp", inf.token.line))
                 } else if inf.operator == "==".to_string() {
                     self.builder
                         .build_int_compare(inkwell::IntPredicate::EQ, l, r, "eqcmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build eqcmp".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build eqcmp", inf.token.line))
                 } else if inf.operator == "!=".to_string() {
                     self.builder
                         .build_int_compare(inkwell::IntPredicate::NE, l, r, "necmp")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build necmp".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build necmp", inf.token.line))
                 } else {
-                    Err("Invalid operator".to_string())
+                    Err(format!("(Line: {}) Invalid operator", inf.token.line))
                 }
             }
             ast::Expression::Prefix(pre) => {
@@ -377,9 +384,12 @@ impl<'ctx> Compiler<'ctx> {
             }
 
             ast::Expression::Ident(ident) => {
-                let ptr = self
-                    .lookup_var(&ident.value)
-                    .ok_or_else(|| format!("Unknown variable {}", ident.value))?;
+                let ptr = self.lookup_var(&ident.value).ok_or_else(|| {
+                    format!(
+                        "(Line: {}) Unknown variable {}",
+                        ident.token.line, ident.value
+                    )
+                })?;
                 let llvm_ty = self.to_llvm_type(&ident.ty)?;
                 self.builder
                     .build_load(llvm_ty, ptr, &ident.value)
@@ -392,14 +402,20 @@ impl<'ctx> Compiler<'ctx> {
                     ast::Expression::Ident(id) => {
                         function_name = id.value.clone();
                     }
-                    _ => return Err("Function call can only be from identifier".to_string()),
+                    _ => {
+                        return Err(format!(
+                            "(Line: {}) Function call can only be from identifier",
+                            c.token.line
+                        ));
+                    }
                 }
 
-                let function = self
-                    .functions
-                    .get(&function_name)
-                    .cloned()
-                    .ok_or_else(|| format!("Undefined function {}", &function_name))?;
+                let function = self.functions.get(&function_name).cloned().ok_or_else(|| {
+                    format!(
+                        "(Line: {}) Undefined function {}",
+                        c.token.line, &function_name
+                    )
+                })?;
 
                 let arg_values: Vec<BasicMetadataValueEnum> = c
                     .arguments
@@ -578,9 +594,12 @@ impl<'ctx> Compiler<'ctx> {
             }
 
             ast::Expression::Assign(assign) => {
-                let ptr = self
-                    .lookup_var(&assign.target.value)
-                    .ok_or_else(|| format!("Unknown variable {}", assign.target.value))?;
+                let ptr = self.lookup_var(&assign.target.value).ok_or_else(|| {
+                    format!(
+                        "During assignment operation, unknown variable {}",
+                        assign.target.value
+                    )
+                })?;
                 let value = self.compile_expr(&assign.value)?;
                 self.builder
                     .build_store(ptr, value)
@@ -595,11 +614,16 @@ impl<'ctx> Compiler<'ctx> {
     }
 }
 
-pub fn jit_run(program: ast::Program) -> Result<i64, String> {
+pub fn jit_run(program: ast::Program, show_ir: bool) -> Result<i64, String> {
     let context = Context::create();
     let mut codegen = Compiler::new(&context);
 
     codegen.compile_program(program)?;
+
+    // show the ir if the user wants to
+    if show_ir {
+        println!("{}", codegen.module.print_to_string().to_string())
+    }
 
     let engine = codegen
         .module
@@ -641,7 +665,7 @@ mod tests {
     fn run(source: &str) -> i64 {
         let program = typecheck_ast(source)
             .unwrap_or_else(|e| panic!("front-end rejected program: {}\n{}", e, source));
-        jit_run(program).unwrap_or_else(|e| panic!("codegen/JIT failed: {}\n{}", e, source))
+        jit_run(program, false).unwrap_or_else(|e| panic!("codegen/JIT failed: {}\n{}", e, source))
     }
 
     fn compile_only(source: &str) -> Result<String, String> {

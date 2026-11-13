@@ -49,29 +49,27 @@ fn read_from_file() -> () {
         println!("{} \n", program.string());
         return;
     }
-    let optimized_program = typecheck(&mut program);
+    let _ = typecheck(&mut program).map_err(|e| format!("error during optimization: {}", e));
 
-    let result = jit_run(program);
+    let mut compiler_error: Option<_> = None;
+    let result = jit_run(program, show_ir);
 
     let res = match result {
         Ok(v) => v,
-        Err(e) => panic!("{}", e),
+        Err(e) => {
+            compiler_error = Some(e);
+            -1
+        }
     };
 
+    if res == -1 && compiler_error.is_some() {
+        println!("error during LLVM codegen: {}", compiler_error.unwrap());
+    }
+
     println!("{}", res);
-
-    // let result = compiler.compile_program(program);
-    // match result {
-    //     Ok(_) => {}
-    //     Err(e) => println!("{}", e),
-    // };
-
-    // if show_ir {
-    //     println!("{}", compiler.module.print_to_string().to_string());
-    //     return;
-    // }
 }
 
+// a way to pretty print errors, in this case we took parser errors
 fn print_parser_errors(errors: &Vec<String>) {
     println!("{}", "Parsing errors".red());
     for err in errors {

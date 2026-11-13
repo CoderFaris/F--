@@ -155,7 +155,7 @@ impl Parser {
 
         self.next_token();
 
-        let value = self.parse_expression(LOWEST);
+        let value = self.parse_expression(LOWEST)?;
 
         if self.peek_token_is(TokenType::Semicolon) {
             self.next_token();
@@ -164,7 +164,7 @@ impl Parser {
         Some(ast::LetStatement {
             token: token,
             name: name,
-            value: value.unwrap(),
+            value: value,
         })
     }
 
@@ -173,7 +173,7 @@ impl Parser {
 
         self.next_token();
 
-        let return_value = self.parse_expression(LOWEST);
+        let return_value = self.parse_expression(LOWEST)?;
 
         if self.peek_token_is(TokenType::Semicolon) {
             self.next_token();
@@ -181,7 +181,7 @@ impl Parser {
 
         Some(ast::ReturnStatement {
             token: token,
-            return_value: return_value.unwrap(),
+            return_value: return_value,
         })
     }
 
@@ -231,11 +231,11 @@ impl Parser {
         let token = self.curr_token.clone();
         let operator = self.curr_token.literal.clone();
         self.next_token();
-        let expression_right = self.parse_expression(PREFIX);
+        let expression_right = self.parse_expression(PREFIX)?;
         Some(ast::Expression::Prefix(Box::new(ast::PrefixExpression {
             token: token,
             operator: operator,
-            right: expression_right.unwrap(),
+            right: expression_right,
             ty: Type::Unknown,
         })))
     }
@@ -267,7 +267,7 @@ impl Parser {
             return None;
         }
 
-        let mut left_exp = prefix.unwrap()(self);
+        let mut left_exp = prefix?(self);
 
         while !self.peek_token_is(TokenType::Semicolon) && precedence < self.peek_precedence() {
             let infix = self
@@ -278,7 +278,7 @@ impl Parser {
                 return left_exp;
             }
             self.next_token();
-            left_exp = infix.unwrap()(self, left_exp?);
+            left_exp = infix?(self, left_exp?);
         }
 
         left_exp
@@ -304,12 +304,12 @@ impl Parser {
 
         self.next_token();
 
-        args.push(self.parse_expression(LOWEST).unwrap());
+        args.push(self.parse_expression(LOWEST)?);
 
         while self.peek_token_is(TokenType::Comma) {
             self.next_token();
             self.next_token();
-            args.push(self.parse_expression(LOWEST).unwrap());
+            args.push(self.parse_expression(LOWEST)?);
         }
 
         if !self.expect_peek(TokenType::RParen) {
