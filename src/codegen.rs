@@ -372,14 +372,14 @@ impl<'ctx> Compiler<'ctx> {
                     self.builder
                         .build_int_neg(r.into_int_value(), "neg")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build neg".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build neg", pre.token.line))
                 } else if pre.operator == "!".to_string() {
                     self.builder
                         .build_not(r.into_int_value(), "not")
                         .map(BasicValueEnum::IntValue)
-                        .map_err(|_| "Failed to build not".to_string())
+                        .map_err(|_| format!("(Line: {}) Failed to build not", pre.token.line))
                 } else {
-                    Err("Unknown operator".to_string())
+                    Err(format!("(Line: {}) Unknown operator", pre.token.line))
                 }
             }
 
@@ -515,10 +515,20 @@ impl<'ctx> Compiler<'ctx> {
                 let cond_bool = self
                     .builder
                     .build_int_truncate(cond_val, self.context.bool_type(), "cond")
-                    .map_err(|_| "Failed to truncate cond in `while`")?;
+                    .map_err(|_| {
+                        format!(
+                            "(Line: {}) Failed to truncate cond in `while`",
+                            w.token.line
+                        )
+                    })?;
                 self.builder
                     .build_conditional_branch(cond_bool, body_bb, end_bb)
-                    .map_err(|_| "Failed to build cond branch in `while`")?;
+                    .map_err(|_| {
+                        format!(
+                            "(Line: {}) Failed to build cond branch in `while`",
+                            w.token.line
+                        )
+                    })?;
                 self.builder.position_at_end(body_bb);
 
                 self.compile_stmt(ast::Statement::Block(w.body.clone()))?;
@@ -532,7 +542,12 @@ impl<'ctx> Compiler<'ctx> {
                 {
                     self.builder
                         .build_unconditional_branch(cond_bb)
-                        .map_err(|_| "Failed to build unconditional branch in `while`")?;
+                        .map_err(|_| {
+                            format!(
+                                "(Line: {}) Failed to build unconditional branch in `while`",
+                                w.token.line
+                            )
+                        })?;
                 }
 
                 self.builder.position_at_end(end_bb);
@@ -543,11 +558,15 @@ impl<'ctx> Compiler<'ctx> {
 
             ast::Expression::Array(a) => {
                 let Type::Array(elem_ty) = &a.ty else {
-                    return Err(format!("array literal has non-array type {:?}", a.ty));
+                    return Err(format!(
+                        "(Line: {}) array literal has non-array type {:?}",
+                        a.token.line, a.ty
+                    ));
                 };
-                let function = self
-                    .current_fn
-                    .ok_or("array literal used outside a function")?;
+                let function = self.current_fn.ok_or(format!(
+                    "(Line: {}) array literal used outside a function",
+                    a.token.line
+                ))?;
 
                 let arr_llvm_ty = self.to_llvm_array_type(elem_ty, a.elements.len() as u32)?;
                 let arr_ptr =
@@ -573,7 +592,11 @@ impl<'ctx> Compiler<'ctx> {
 
             ast::Expression::Index(i) => {
                 let Type::Array(elem_ty) = i.left.ty() else {
-                    return Err(format!("indexing a non-array type {:?}", i.left.ty()));
+                    return Err(format!(
+                        "(Line: {}) indexing a non-array type {:?}",
+                        i.token.line,
+                        i.left.ty()
+                    ));
                 };
                 let elem_llvm_ty = self.to_llvm_type(elem_ty)?;
                 let base = self.compile_expr(&i.left)?.into_pointer_value();
@@ -596,19 +619,20 @@ impl<'ctx> Compiler<'ctx> {
             ast::Expression::Assign(assign) => {
                 let ptr = self.lookup_var(&assign.target.value).ok_or_else(|| {
                     format!(
-                        "During assignment operation, unknown variable {}",
-                        assign.target.value
+                        "(Line: {}) During assignment operation, unknown variable {}",
+                        assign.token.line, assign.target.value
                     )
                 })?;
                 let value = self.compile_expr(&assign.value)?;
                 self.builder
                     .build_store(ptr, value)
-                    .map_err(|e| format!("codegen error: {}", e))?;
+                    .map_err(|e| format!("(Line: {}) codegen error: {}", assign.token.line, e))?;
                 Ok(value)
             }
-            ast::Expression::Function(_) => {
-                Err("function literals must be bound with `let name = fn...`;".to_string())
-            }
+            ast::Expression::Function(f) => Err(format!(
+                "(Line: {}) function literals must be bound with `let name = fn...`;",
+                f.token.line
+            )),
             _ => todo!("handle rest of expression types"),
         }
     }

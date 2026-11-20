@@ -1,5 +1,0 @@
-let add = fn(x: int, y: int) -> int {
-    let helper = fn(m: int, n: int) -> int {
-
-    }
-}

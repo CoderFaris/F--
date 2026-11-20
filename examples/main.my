@@ -1,11 +1,10 @@
-// this is a comment
 let five = 5;
-let i = 0;
 let double_n_times = fn(x: int, y: int) -> int {
+    let i = 0;
     while(i < y) {
         x = x * 2;
         i = i + 1;
     }
     return x;
 }
-five = double_n_times(five);
+five = double_n_times(five, 3);
