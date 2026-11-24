@@ -66,7 +66,7 @@ source → Lexer → Parser → Type checker → Optimizer → LLVM codegen → 
 |---|---|---|
 | Lexer | `src/lexer.rs` | Turns source text into tokens |
 | Parser | `src/parser.rs` | Pratt parser that builds the AST |
-| Type checker | `src/type_checker.rs` | Two passes: collects function signatures, then checks every expression and fills in its type (unification-based). Local type infeernce is used |
+| Type checker | `src/type_checker.rs` | Two passes: collects function signatures, then checks every expression and fills in its type (unification-based). Local type inference is used |
 | Optimizer | `src/visitor.rs` | Visitor-based AST passes; currently constant folding |
 | Codegen | `src/codegen.rs` | Lowers the typed AST to LLVM IR in three passes: declare functions, compile function bodies, wrap top-level statements in an entry function |
 
