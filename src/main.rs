@@ -1,3 +1,82 @@
+use colored::Colorize;
+use compiler::ast::Node;
+use compiler::codegen::Compiler;
+use compiler::codegen::jit_run;
+use compiler::lexer::Lexer;
+use compiler::parser::Parser;
+use compiler::token::TokenType;
+use compiler::type_checker::typecheck;
+use inkwell::context::Context;
+use std::env;
+use std::fs::File;
+use std::io::Read;
+
+fn read_from_file() -> () {
+    let args: Vec<_> = env::args().skip(1).collect();
+    let show_tokens = args.contains(&String::from("--tokens"));
+    let show_ast = args.contains(&String::from("--ast"));
+    let show_ir = args.contains(&String::from("--ir"));
+    let text = match args.first() {
+        Some(path) => {
+            let mut file = File::open(path).expect("File not found");
+            let mut text = String::new();
+            file.read_to_string(&mut text)
+                .expect("Could not read the file");
+            text
+        }
+        None => {
+            panic!("Expected the path to the file as the first argument");
+        }
+    };
+    let mut l = Lexer::new(&text.to_string());
+    if show_tokens {
+        // go through the tokens in the lexer
+        let mut tok = l.next_token();
+        while tok.token_type != TokenType::Eof {
+            println!("{}", tok);
+            tok = l.next_token();
+        }
+        println!("{}", tok); // printing the EOF
+        return;
+    }
+    let mut p = Parser::new(l);
+    let mut program = p.parse();
+    if p.errors().len() > 0 {
+        print_parser_errors(&p.errors());
+        return;
+    }
+    if show_ast {
+        println!("{} \n", program.string());
+        return;
+    }
+    let _ = typecheck(&mut program).map_err(|e| format!("error during optimization: {}", e));
+
+    let mut compiler_error: Option<_> = None;
+    let result = jit_run(program, show_ir);
+
+    let res = match result {
+        Ok(v) => v,
+        Err(e) => {
+            compiler_error = Some(e);
+            -1
+        }
+    };
+
+    if res == -1 && compiler_error.is_some() {
+        println!("error during LLVM codegen: {}", compiler_error.unwrap());
+    }
+
+    println!("{}", res);
+}
+
+// a way to pretty print errors, in this case we took parser errors
+fn print_parser_errors(errors: &Vec<String>) {
+    println!("{}", "Parsing errors".red());
+    for err in errors {
+        eprintln!("\t {} \n", err);
+    }
+}
+
 fn main() {
-    println!("Hello world");
+    read_from_file();
 }
