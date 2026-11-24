@@ -1,10 +1,8 @@
-let five = 5;
-let double_n_times = fn(x: int, y: int) -> int {
-    let i = 0;
-    while(i < y) {
-        x = x * 2;
-        i = i + 1;
+let fib = fn(n: int) -> int {
+    if (n < 2) {
+        return n;
+    } else {
+        return fib(n - 1) + fib(n - 2);
     }
-    return x;
 }
-five = double_n_times(five, 3);
+fib(10);
