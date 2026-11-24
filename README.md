@@ -1,4 +1,4 @@
-# <F-->
+# F--
 
 A small statically typed programming language with a compiler written in Rust. Source code goes through a hand-written lexer, a Pratt parser, a type checker and an optimization pass, and is then compiled to native code with [LLVM](https://llvm.org/) (via [inkwell](https://github.com/TheDan64/inkwell)) and run through LLVM's JIT.
 
